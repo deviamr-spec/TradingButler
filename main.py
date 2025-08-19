@@ -83,7 +83,7 @@ def main():
     logger.info("STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY")
     logger.info("=" * 60)
     
-    # MT5 REAL TRADING CHECK - NO DEMO/MOCK ALLOWED
+    # MT5 REAL TRADING VALIDATION - MANDATORY FOR OPERATION
     try:
         import MetaTrader5 as mt5
         # Test real MT5 connection immediately
@@ -91,19 +91,56 @@ def main():
             account_info = mt5.account_info()
             if account_info is not None:
                 MT5_AVAILABLE = True
-                logger.info(f"✅ MT5 CONNECTED - Account: {account_info.login}")
-                logger.info(f"✅ Balance: ${account_info.balance:.2f} - LIVE TRADING READY")
-                logger.info("✅ REAL MONEY TRADING ACTIVATED - NO DEMO MODE")
+                logger.info(f"✅ REAL MT5 CONNECTED - Account: {account_info.login}")
+                logger.info(f"✅ Live Balance: ${account_info.balance:.2f}")
+                logger.info(f"✅ Server: {account_info.server if hasattr(account_info, 'server') else 'Unknown'}")
+                logger.info("🚀 LIVE MONEY TRADING MODE ACTIVATED")
                 mt5.shutdown()  # Close test connection
             else:
-                logger.error("❌ MT5 FATAL: Not logged in - Please login to MT5 first")
+                logger.error("❌ CRITICAL: MT5 not logged in!")
+                logger.error("❌ Please login to MetaTrader 5 terminal first")
+                logger.error("❌ Real money trading requires valid account")
                 MT5_AVAILABLE = False
+                
+                # Exit if no real account
+                print("\n" + "="*60)
+                print("CRITICAL ERROR: NO REAL MT5 ACCOUNT DETECTED")
+                print("This bot requires a real MetaTrader 5 account for live trading.")
+                print("Please:")
+                print("1. Open MetaTrader 5 terminal")
+                print("2. Login with your real trading account")
+                print("3. Ensure 'Allow automated trading' is enabled")
+                print("4. Restart this application")
+                print("="*60)
+                return 1
         else:
-            logger.error("❌ MT5 FATAL: Cannot initialize - Check installation")
+            logger.error("❌ CRITICAL: MT5 initialization failed!")
+            logger.error("❌ Check MetaTrader 5 installation")
             MT5_AVAILABLE = False
+            
+            print("\n" + "="*60)
+            print("CRITICAL ERROR: METATRADER 5 NOT AVAILABLE")
+            print("This bot requires MetaTrader 5 for live trading.")
+            print("Please install MetaTrader 5 and try again.")
+            print("="*60)
+            return 1
+            
     except ImportError:
-        logger.error("❌ MetaTrader5 not installed - pip install MetaTrader5")
+        logger.error("❌ CRITICAL: MetaTrader5 Python module not installed!")
+        logger.error("❌ Install with: pip install MetaTrader5")
         MT5_AVAILABLE = False
+        
+        print("\n" + "="*60)
+        print("CRITICAL ERROR: METATRADER5 MODULE MISSING")
+        print("Install the required module:")
+        print("pip install MetaTrader5")
+        print("="*60)
+        return 1
+    
+    # Reject startup if no real MT5
+    if not MT5_AVAILABLE:
+        logger.error("❌ STARTUP REJECTED - REAL MT5 REQUIRED")
+        return 1
     
     # Create QApplication
     app = QApplication(sys.argv)
@@ -123,18 +160,21 @@ def main():
         main_window = MainWindow(controller)
         main_window.show()
         
-        logger.info("FIXED Bot Application initialized successfully!")
-        logger.info("PERBAIKAN YANG TELAH DITERAPKAN:")
-        logger.info("1. Analysis Worker dengan heartbeat setiap 1 detik")
-        logger.info("2. Auto-execute signals (non-shadow mode)")
-        logger.info("3. TP/SL input dinamis (ATR/Points/Pips/Balance%)")
-        logger.info("4. Pre-flight checks lengkap")
-        logger.info("5. Real-time data feed dengan error handling")
-        logger.info("6. Risk management dan emergency controls")
-        logger.info("7. Comprehensive logging dan diagnostics")
+        logger.info("🚀 REAL MONEY TRADING BOT INITIALIZED SUCCESSFULLY!")
+        logger.info("💰 LIVE TRADING FEATURES ACTIVE:")
+        logger.info("1. ✅ Real MT5 connection with live account data")
+        logger.info("2. ✅ Auto-execute signals with real money orders")
+        logger.info("3. ✅ Dynamic TP/SL calculation (ATR/Points/Pips/Balance%)")
+        logger.info("4. ✅ Real-time account monitoring and risk management")
+        logger.info("5. ✅ Live position tracking and P&L updates")
+        logger.info("6. ✅ Emergency stop with instant position closure")
+        logger.info("7. ✅ Real tick data feed and indicator calculations")
+        logger.info("8. ✅ Professional trade logging and analysis")
         logger.info("=" * 60)
-        logger.info("READY FOR PROFESSIONAL SCALPING ON XAUUSD")
-        logger.info("Start → Connect → Start Bot untuk mulai trading!")
+        logger.info("🎯 READY FOR LIVE SCALPING ON XAUUSD")
+        logger.info("⚠️  WARNING: THIS BOT TRADES WITH REAL MONEY!")
+        logger.info("📋 WORKFLOW: Connect → Configure Risk → Start Bot")
+        logger.info("🛡️  START IN SHADOW MODE FOR TESTING FIRST")
         logger.info("=" * 60)
         
         # Start event loop
