@@ -1,0 +1,89 @@
+bjective: Identify and resolve issues causing the trading bot to malfunction in live trading scenarios.
+
+1. Connection Failures to MetaTrader 5
+Issue: Unable to establish a connection to the MT5 terminal or account.
+
+Potential Causes:
+
+MT5 terminal isn't running or incorrectly configured.
+Missing required permissions in the MT5 settings.
+Suggested Fix:
+
+def connect_to_mt5(self) -> bool:
+    try:
+        self.log_message("🔌 Connecting to MetaTrader 5...", "INFO")
+        if not mt5.initialize():
+            error_code, error_desc = mt5.last_error()
+            self.log_message(f"MT5 init failed: {error_code} - {error_desc}", "WARNING")
+            return False
+        self.log_message("✓ MT5 initialized successfully", "INFO")
+    except Exception as e:
+        self.log_message(f"MT5 init exception: {str(e)}", "WARNING")
+        return False
+    return True
+Ensure that MT5 is running and logged in correctly.
+2. Auto Execution of Trades Not Working
+Issue: Orders are not being executed as per the defined signals.
+
+Potential Causes:
+
+Inadequate error handling during order placements.
+Incorrectly set risk parameters or trade limits.
+Suggested Fix:
+
+def execute_order(side, volume):
+    order_type = mt5.ORDER_BUY if side == 'buy' else mt5.ORDER_SELL
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": "XAUUSD",
+        "volume": volume,
+        "type": order_type,
+        "deviation": 10,
+        "magic": 123456,
+        "comment": "Auto-trade",
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_FOK,
+    }
+    result = mt5.order_send(request)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        print(f"❌ Order failed: {mt5.last_error()}")
+Validate the response of the order_send to confirm successful order execution.
+3. GUI Interaction Issues
+Issue: GUI buttons or widgets are unresponsive.
+
+Potential Causes:
+
+GUI components being accessed before full initialization.
+Event handling issues due to threading problems.
+Suggested Fix:
+
+if self.start_trading_button is not None:
+    self.start_trading_button.clicked.connect(self.start_trading)
+else:
+    self.log_message("❌ Start Trading Button is not initialized", "ERROR")
+Always ensure components like buttons are fully initialized before binding event handlers.
+4. Insufficient Market Data for Auto Analysis
+Issue: The trading bot fails to perform market analysis.
+
+Potential Causes:
+
+Not enough historical data retrieved from MT5.
+Market connection issues or incorrect symbol selection.
+Suggested Fix:
+
+def check_market_data(self):
+    if not mt5.symbol_select("XAUUSD", True):
+        raise Exception("Symbol XAUUSD not available")
+    # Fetch market data with sufficient checks.
+Ensure that the selected symbol is available in the Market Watch within MT5.
+5. Logging and Diagnostics
+Issue: Inadequate logging makes troubleshooting difficult.
+
+Suggested Fix:
+Enhance the logging system to include more detailed outputs regarding the connection and order execution processes.
+
+def log_event(event_description):
+    with open("event_log.txt", "a") as log_file:
+        log_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_file.write(f"{log_time} - {event_description}\n")
+Log detailed information for each critical operation to assist in diagnosing issues.
