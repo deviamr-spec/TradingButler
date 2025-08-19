@@ -1047,7 +1047,7 @@ class MainWindow(QMainWindow):
 
                 # Auto-scroll to bottom
                 cursor = self.log_display.textCursor()
-                cursor.movePosition(cursor.MoveOperation.End)
+                cursor.movePosition(cursor.End)
                 self.log_display.setTextCursor(cursor)
 
         except Exception as e:

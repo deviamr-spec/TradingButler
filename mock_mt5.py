@@ -9,22 +9,97 @@ from datetime import datetime, timedelta
 from typing import NamedTuple, Optional, List
 import numpy as np
 
-# Constants (matching real MT5 constants)
-TIMEFRAME_M1 = 1
-TIMEFRAME_M5 = 5
+# Order type constants
 ORDER_TYPE_BUY = 0
 ORDER_TYPE_SELL = 1
+ORDER_TYPE_BUY_LIMIT = 2
+ORDER_TYPE_SELL_LIMIT = 3
+ORDER_TYPE_BUY_STOP = 4
+ORDER_TYPE_SELL_STOP = 5
+
+# Trade action constants
 TRADE_ACTION_DEAL = 1
+TRADE_ACTION_PENDING = 5
+TRADE_ACTION_SLTP = 6
+TRADE_ACTION_MODIFY = 7
+TRADE_ACTION_REMOVE = 8
+TRADE_ACTION_CLOSE_BY = 10
+
+# Order time constants
 ORDER_TIME_GTC = 0
-ORDER_FILLING_IOC = 2
-ORDER_FILLING_FOK = 1
+ORDER_TIME_DAY = 1
+ORDER_TIME_SPECIFIED = 2
+ORDER_TIME_SPECIFIED_DAY = 3
+
+# Order filling constants
+ORDER_FILLING_FOK = 0
+ORDER_FILLING_IOC = 1
+ORDER_FILLING_RETURN = 2
+
+# Trade retcode constants
 TRADE_RETCODE_DONE = 10009
-TRADE_RETCODE_PRICE_OFF = 10015
-TRADE_RETCODE_REQUOTE = 10014
-SYMBOL_TRADE_MODE_FULL = 0
-SYMBOL_CALC_MODE_FOREX = 0
+TRADE_RETCODE_ERROR = 10004
+TRADE_RETCODE_REQUOTE = 10004
+TRADE_RETCODE_REJECT = 10006
+TRADE_RETCODE_CANCEL = 10007
+TRADE_RETCODE_PLACED = 10008
+TRADE_RETCODE_TIMEOUT = 10012
+TRADE_RETCODE_INVALID = 10013
+TRADE_RETCODE_INVALID_VOLUME = 10014
+TRADE_RETCODE_INVALID_PRICE = 10015
+TRADE_RETCODE_INVALID_STOPS = 10016
+TRADE_RETCODE_TRADE_DISABLED = 10017
+TRADE_RETCODE_MARKET_CLOSED = 10018
+TRADE_RETCODE_NO_MONEY = 10019
+TRADE_RETCODE_PRICE_CHANGED = 10020
+TRADE_RETCODE_PRICE_OFF = 10021
+TRADE_RETCODE_INVALID_EXPIRATION = 10022
+TRADE_RETCODE_ORDER_CHANGED = 10023
+TRADE_RETCODE_TOO_MANY_REQUESTS = 10024
+TRADE_RETCODE_NO_CHANGES = 10025
+TRADE_RETCODE_SERVER_DISABLES_AT = 10026
+TRADE_RETCODE_CLIENT_DISABLES_AT = 10027
+TRADE_RETCODE_LOCKED = 10028
+TRADE_RETCODE_FROZEN = 10029
+TRADE_RETCODE_INVALID_FILL = 10030
+TRADE_RETCODE_CONNECTION = 10031
+TRADE_RETCODE_ONLY_REAL = 10032
+TRADE_RETCODE_LIMIT_ORDERS = 10033
+TRADE_RETCODE_LIMIT_VOLUME = 10034
+TRADE_RETCODE_INVALID_ORDER = 10035
+TRADE_RETCODE_POSITION_CLOSED = 10036
+
+# Timeframe constants
+TIMEFRAME_M1 = 1
+TIMEFRAME_M5 = 5
+TIMEFRAME_M15 = 15
+TIMEFRAME_M30 = 30
+TIMEFRAME_H1 = 16385
+TIMEFRAME_H4 = 16388
+TIMEFRAME_D1 = 16408
+
+# Position type constants
 POSITION_TYPE_BUY = 0
 POSITION_TYPE_SELL = 1
+
+# Symbol trade mode
+SYMBOL_TRADE_MODE_DISABLED = 0
+SYMBOL_TRADE_MODE_LONGONLY = 1
+SYMBOL_TRADE_MODE_SHORTONLY = 2
+SYMBOL_TRADE_MODE_CLOSEONLY = 3
+SYMBOL_TRADE_MODE_FULL = 4
+
+# Account trade mode constants
+ACCOUNT_TRADE_MODE_DEMO = 0
+ACCOUNT_TRADE_MODE_CONTEST = 1
+ACCOUNT_TRADE_MODE_REAL = 2
+
+# Symbol calc mode constants
+SYMBOL_CALC_MODE_FOREX = 0
+SYMBOL_CALC_MODE_FUTURES = 1
+SYMBOL_CALC_MODE_CFD = 2
+SYMBOL_CALC_MODE_CFDINDEX = 3
+SYMBOL_CALC_MODE_CFDLEVERAGE = 4
 
 class AccountInfo(NamedTuple):
     login: int = 12345678
@@ -125,14 +200,14 @@ def symbol_select(symbol: str, enable: bool) -> bool:
 def symbol_info_tick(symbol: str) -> Optional[TickInfo]:
     """Get current tick"""
     global _current_price, _price_direction
-    
+
     if not _is_initialized or symbol not in ["XAUUSD", "XAUUSDm", "XAUUSDc"]:
         return None
-    
+
     # Simulate price movement
     change = random.uniform(-0.5, 0.5) * _price_direction
     _current_price += change
-    
+
     # Ensure price stays in realistic range
     if _current_price < 1900:
         _current_price = 1900
@@ -140,15 +215,15 @@ def symbol_info_tick(symbol: str) -> Optional[TickInfo]:
     elif _current_price > 2100:
         _current_price = 2100
         _price_direction = -1
-    
+
     # Random direction change
     if random.random() < 0.1:
         _price_direction *= -1
-    
+
     spread = random.uniform(0.3, 0.8)
     bid = _current_price
     ask = _current_price + spread
-    
+
     return TickInfo(
         time=int(time.time()),
         bid=bid,
@@ -161,18 +236,18 @@ def copy_rates_from_pos(symbol: str, timeframe: int, start_pos: int, count: int)
     """Get historical rates"""
     if not _is_initialized:
         return None
-    
+
     # Generate realistic OHLCV data
     rates = []
     base_time = int(time.time()) - (count * timeframe * 60)
-    
+
     for i in range(count):
         # Generate realistic OHLC data around current price
         close = _current_price + random.uniform(-10, 10)
         open_price = close + random.uniform(-2, 2)
         high = max(open_price, close) + random.uniform(0, 3)
         low = min(open_price, close) - random.uniform(0, 3)
-        
+
         rate = {
             'time': base_time + (i * timeframe * 60),
             'open': open_price,
@@ -184,7 +259,7 @@ def copy_rates_from_pos(symbol: str, timeframe: int, start_pos: int, count: int)
             'real_volume': 0
         }
         rates.append(tuple(rate.values()))
-    
+
     # Convert to structured array like real MT5
     dtype = [
         ('time', 'i8'), ('open', 'f8'), ('high', 'f8'), 
@@ -196,15 +271,15 @@ def copy_rates_from_pos(symbol: str, timeframe: int, start_pos: int, count: int)
 def order_send(request: dict) -> TradeResult:
     """Send trading order"""
     global _positions
-    
+
     if not _is_initialized:
         return TradeResult(retcode=2, comment="Not initialized")
-    
+
     # Simulate order execution
     success_rate = 0.95  # 95% success rate
     if random.random() > success_rate:
         return TradeResult(retcode=10015, comment="Invalid request")
-    
+
     # Create position if successful
     if request.get("action") == TRADE_ACTION_DEAL:
         position = Position(
@@ -225,7 +300,7 @@ def order_send(request: dict) -> TradeResult:
             comment=request.get("comment", "")
         )
         _positions.append(position)
-    
+
     return TradeResult(
         retcode=TRADE_RETCODE_DONE,
         volume=request.get("volume", 0.01),
@@ -236,7 +311,7 @@ def positions_get(symbol: str = "") -> Optional[List[Position]]:
     """Get open positions"""
     if not _is_initialized:
         return None
-    
+
     if symbol:
         return [pos for pos in _positions if pos.symbol == symbol]
     return _positions

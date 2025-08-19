@@ -800,70 +800,6 @@ class BotController(QObject):
             self.log_message(error_msg, "ERROR")
             return False
 
-    def execute_manual_trade(self, side, lot_size):
-        """Execute REAL manual trade order via MT5"""
-        try:
-            if not self.is_connected or not MT5_AVAILABLE:
-                return {'success': False, 'error': 'MT5 not connected - Real trading required'}
-
-            symbol = self.config['symbol']
-
-            # Get current tick
-            tick = mt5.symbol_info_tick(symbol)
-            if not tick:
-                return {'success': False, 'error': 'Cannot get current price'}
-
-            # Determine order type and price
-            if side == "BUY":
-                order_type = mt5.ORDER_TYPE_BUY
-                price = tick.ask
-            else:
-                order_type = mt5.ORDER_TYPE_SELL
-                price = tick.bid
-
-            # Manual trades without automatic SL/TP
-            request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "volume": lot_size,
-                "type": order_type,
-                "price": price,
-                "deviation": self.config.get('deviation', 10),
-                "magic": self.config.get('magic_number', 234567),
-                "comment": f"MANUAL_{side}",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-            }
-
-            # Execute REAL manual order
-            result = mt5.order_send(request)
-
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                # Try FOK
-                request["type_filling"] = mt5.ORDER_FILLING_FOK
-                result = mt5.order_send(request)
-
-            if result.retcode == mt5.TRADE_RETCODE_DONE:
-                self.log_message(f"✅ MANUAL {side} EXECUTED: {lot_size} lots @ {price:.5f}", "INFO")
-                self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
-                self.daily_trades += 1
-                return {
-                    'success': True, 
-                    'ticket': result.order, 
-                    'price': result.price,
-                    'deal': result.deal
-                }
-            else:
-                return {
-                    'success': False, 
-                    'error': f"Order failed: {result.retcode} - {result.comment}"
-                }
-
-        except Exception as e:
-            error_msg = f"Manual trade error: {e}"
-            self.log_message(error_msg, "ERROR")
-            return {'success': False, 'error': error_msg}
-
     def calculate_lot_size(self, signal):
         """Calculate lot size based on account risk percentage"""
         try:
@@ -1053,6 +989,7 @@ class BotController(QObject):
             error_msg = f"Manual trade error: {e}"
             self.log_message(error_msg, "ERROR")
             return {'success': False, 'error': error_msg}
+
 
     def start_bot(self) -> bool:
         """Start bot"""
@@ -1402,69 +1339,3 @@ class BotController(QObject):
 
         except Exception as e:
             self.log_message(f"Symbol info logging error: {e}", "ERROR")
-
-    def execute_manual_trade(self, side, lot_size):
-        """Execute REAL manual trade order via MT5"""
-        try:
-            if not self.is_connected or not MT5_AVAILABLE:
-                return {'success': False, 'error': 'MT5 not connected - Real trading required'}
-
-            symbol = self.config['symbol']
-
-            # Get current tick
-            tick = mt5.symbol_info_tick(symbol)
-            if not tick:
-                return {'success': False, 'error': 'Cannot get current price'}
-
-            # Determine order type and price
-            if side == "BUY":
-                order_type = mt5.ORDER_TYPE_BUY
-                price = tick.ask
-            else:
-                order_type = mt5.ORDER_TYPE_SELL
-                price = tick.bid
-
-            # Manual trades without automatic SL/TP
-            request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "volume": lot_size,
-                "type": order_type,
-                "price": price,
-                "deviation": self.config.get('deviation', 10),
-                "magic": self.config.get('magic_number', 234567),
-                "comment": f"MANUAL_{side}",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-            }
-
-            # Execute REAL manual order
-            result = mt5.order_send(request)
-
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                # Try FOK
-                request["type_filling"] = mt5.ORDER_FILLING_FOK
-                result = mt5.order_send(request)
-
-            if result.retcode == mt5.TRADE_RETCODE_DONE:
-                self.log_message(f"✅ MANUAL {side} EXECUTED: {lot_size} lots @ {price:.5f}", "INFO")
-                self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
-                self.daily_trades += 1
-                return {
-                    'success': True, 
-                    'ticket': result.order, 
-                    'price': result.price,
-                    'deal': result.deal
-                }
-            else:
-                return {
-                    'success': False, 
-                    'error': f"Order failed: {result.retcode} - {result.comment}"
-                }
-
-        except Exception as e:
-            error_msg = f"Manual trade error: {e}"
-            self.log_message(error_msg, "ERROR")
-            return {'success': False, 'error': error_msg}
-
-    def close_all_positions(self):

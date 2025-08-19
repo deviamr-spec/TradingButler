@@ -66,21 +66,81 @@ def setup_logging():
         # Python < 3.7 atau tidak support reconfigure
         pass
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_dir / 'scalping_bot.log', encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ]
+    # Enhanced logging configuration
+    log_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
+
+    # File handler
+    file_handler = logging.FileHandler(
+        log_dir / 'scalping_bot.log', 
+        encoding='utf-8', 
+        mode='a'
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(log_formatter)
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(log_formatter)
+
+    # Root logger configuration
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
     return logging.getLogger(__name__)
+
+def validate_production_environment():
+    """Validate production environment requirements"""
+    validation_results = []
+    
+    # Check Python version
+    if sys.version_info < (3, 7):
+        validation_results.append("❌ Python 3.7+ required for production")
+    else:
+        validation_results.append("✅ Python version compatible")
+    
+    # Check required modules
+    required_modules = ['PySide6', 'numpy', 'pytz']
+    for module in required_modules:
+        try:
+            __import__(module)
+            validation_results.append(f"✅ {module} available")
+        except ImportError:
+            validation_results.append(f"❌ {module} missing - install required")
+    
+    # Check MT5 availability
+    try:
+        import MetaTrader5 as mt5
+        validation_results.append("✅ MetaTrader5 module available")
+    except ImportError:
+        validation_results.append("⚠️ MetaTrader5 module not found - will use demo mode")
+    
+    # Check log directory
+    log_dir = Path("logs")
+    if log_dir.exists() or log_dir.mkdir(exist_ok=True):
+        validation_results.append("✅ Log directory ready")
+    else:
+        validation_results.append("❌ Cannot create log directory")
+    
+    return validation_results
 
 def main():
     """Main application entry point dengan error handling lengkap"""
     logger = setup_logging()
     logger.info("=" * 60)
     logger.info("STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY")
+    logger.info("=" * 60)
+    
+    # Validate production environment
+    logger.info("🔍 VALIDATING PRODUCTION ENVIRONMENT...")
+    validation_results = validate_production_environment()
+    for result in validation_results:
+        logger.info(result)
     logger.info("=" * 60)
 
     # MT5 REAL TRADING VALIDATION - MANDATORY FOR OPERATION

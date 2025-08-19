@@ -17,7 +17,7 @@ COOLDOWN_MINUTES = 30           # Cooldown period after max losses
 # TECHNICAL ANALYSIS SETTINGS
 EMA_PERIODS = {
     'fast': 9,      # Fast EMA for trend detection
-    'medium': 21,   # Medium EMA for pullback identification  
+    'medium': 21,   # Medium EMA for pullback identification
     'slow': 50      # Slow EMA for major trend filter
 }
 
@@ -97,3 +97,24 @@ HEARTBEAT_INTERVAL = 1000       # Heartbeat interval (milliseconds)
 ORDER_TIMEOUT = 5000           # Order execution timeout (milliseconds)
 SLIPPAGE_TOLERANCE = 20        # Maximum allowed slippage (points)
 FILL_POLICY = "IOC"           # Order fill policy (IOC/FOK)
+
+# WINDOWS COMPATIBILITY
+CONSOLE_ENCODING = "utf-8"     # Console encoding for Windows
+LOG_FILE_ENCODING = "utf-8"    # Log file encoding
+
+# PRODUCTION SAFETY
+ENABLE_REAL_TRADING = True     # Enable real trading (set False for testing)
+AUTO_START_ANALYSIS = True     # Auto-start analysis worker on connect
+STRICT_ERROR_HANDLING = True   # Enable strict error handling
+
+# SYMBOL SPECIFICATIONS
+DEFAULT_SYMBOL_SPECS = {
+    'XAUUSD': {
+        'point': 0.01,
+        'digits': 2,
+        'volume_min': 0.01,
+        'volume_max': 100.0,
+        'volume_step': 0.01,
+        'margin_rate': 1000.0
+    }
+}

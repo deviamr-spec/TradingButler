@@ -7,7 +7,7 @@ channel = "stable-25_05"
 packages = ["fontconfig", "freetype", "glib", "glibcLocales", "libGL", "libxcrypt", "libxkbcommon", "mesa", "qt6.qtbase", "xorg.libX11", "xorg.libXext"]
 
 [workflows]
-runButton = "Project"
+runButton = "MT5 Bot Production"
 
 [[workflows.workflow]]
 name = "MT5 Real Trading Bot"
@@ -73,3 +73,12 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python mt5_production_final.py"
+
+[[workflows.workflow]]
+name = "MT5 Bot Production"
+author = 46609734
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
