@@ -1,0 +1,16 @@
+2025-08-19 05:38:06,848 - __main__ - INFO - ============================================================
+2025-08-19 05:38:06,848 - __main__ - INFO - 🚀 MT5 PROFESSIONAL SCALPING BOT - LIVE TRADING
+2025-08-19 05:38:06,848 - __main__ - INFO - ============================================================
+2025-08-19 05:38:06,852 - __main__ - ERROR - ❌ MetaTrader5 module not installed - pip install MetaTrader5
+2025-08-19 05:38:06,852 - __main__ - ERROR - TROUBLESHOOTING GUIDE:
+2025-08-19 05:38:06,852 - __main__ - ERROR - 1. Make sure MT5 terminal is running and logged in
+2025-08-19 05:38:06,852 - __main__ - ERROR - 2. Enable 'Allow automated trading' in MT5 settings
+2025-08-19 05:38:06,852 - __main__ - ERROR - 3. Add XAUUSD to Market Watch
+2025-08-19 05:38:06,853 - __main__ - ERROR - 4. Install MetaTrader5: pip install MetaTrader5
+2025-08-19 05:38:06,896 - __main__ - INFO - 🔧 Initializing trading controller...
+2025-08-19 05:38:06,897 - controller - INFO - Enhanced bot controller initialized
+2025-08-19 05:38:06,897 - __main__ - INFO - 🖥️ Creating main window...
+2025-08-19 05:38:06,956 - __main__ - INFO - ✅ Application initialized successfully
+2025-08-19 05:38:06,956 - __main__ - INFO - ✅ GUI loaded and ready
+2025-08-19 05:38:06,956 - __main__ - INFO - ✅ All systems operational
+2025-08-19 05:38:06,956 - __main__ - INFO - 📊 DEMO MODE - Fix MT5 connection for live trading
