@@ -572,10 +572,12 @@ class MainWindow(QMainWindow):
             self.manual_buy_btn = QPushButton("📈 Manual BUY")
             self.manual_buy_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; }")
             self.manual_buy_btn.setEnabled(False)
+            self.manual_buy_btn.clicked.connect(self.on_manual_buy)
             
             self.manual_sell_btn = QPushButton("📉 Manual SELL")
             self.manual_sell_btn.setStyleSheet("QPushButton { background-color: #F44336; color: white; }")
             self.manual_sell_btn.setEnabled(False)
+            self.manual_sell_btn.clicked.connect(self.on_manual_sell)
             
             manual_layout.addRow("📊 Side:", self.manual_side_combo)
             manual_layout.addRow("📦 Lot Size:", self.manual_lot_spin)
@@ -1170,6 +1172,69 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Indicators update error: {e}")
     
+    def on_manual_buy(self):
+        """Handle manual BUY order"""
+        try:
+            if not self.controller.is_connected:
+                QMessageBox.warning(self, "Warning", "Not connected to MT5!")
+                return
+            
+            lot_size = self.manual_lot_spin.value()
+            result = self.controller.execute_manual_trade('BUY', lot_size)
+            
+            if result.get('success'):
+                QMessageBox.information(self, "Success", f"BUY order executed successfully!\nTicket: {result.get('ticket')}")
+            else:
+                QMessageBox.warning(self, "Error", f"BUY order failed: {result.get('error')}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Manual BUY error: {e}")
+    
+    def on_manual_sell(self):
+        """Handle manual SELL order"""
+        try:
+            if not self.controller.is_connected:
+                QMessageBox.warning(self, "Warning", "Not connected to MT5!")
+                return
+            
+            lot_size = self.manual_lot_spin.value()
+            result = self.controller.execute_manual_trade('SELL', lot_size)
+            
+            if result.get('success'):
+                QMessageBox.information(self, "Success", f"SELL order executed successfully!\nTicket: {result.get('ticket')}")
+            else:
+                QMessageBox.warning(self, "Error", f"SELL order failed: {result.get('error')}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Manual SELL error: {e}")
+
+    @Slot(dict)
+    def on_trading_signal(self, signal):
+        """Handle trading signal from analysis worker"""
+        try:
+            # Update current signal display
+            if hasattr(self, 'signal_label'):
+                self.signal_label.setText(signal.get('signal', 'None'))
+            if hasattr(self, 'entry_price_label'):
+                self.entry_price_label.setText(f"{signal.get('entry_price', 'N/A')}")
+            if hasattr(self, 'reason_label'):
+                self.reason_label.setText(signal.get('reason', 'N/A'))
+            if hasattr(self, 'time_label'):
+                self.time_label.setText(signal.get('time', 'N/A'))
+                
+            # Update execution statistics
+            if hasattr(self, 'signals_generated_label'):
+                stats = self.controller.get_execution_stats()
+                self.signals_generated_label.setText(str(stats.get('signals_generated', 0)))
+                self.signals_executed_label.setText(str(stats.get('signals_executed', 0)))
+                rate = stats.get('execution_rate', 0)
+                self.execution_rate_label.setText(f"{rate:.1f}%")
+                last_exec = stats.get('last_execution', 'Never')
+                self.last_execution_label.setText(str(last_exec))
+                
+        except Exception as e:
+            print(f"Trading signal update error: {e}")
+    
     # UTILITY METHODS
     def update_controller_config(self):
         """Update controller configuration dari GUI inputs"""
@@ -1249,10 +1314,10 @@ class MainWindow(QMainWindow):
                     self.start_btn.setEnabled(False)
                 if self.stop_btn:
                     self.stop_btn.setEnabled(True)
-                if self.manual_buy_btn and self.shadow_mode_cb:
-                    self.manual_buy_btn.setEnabled(not self.shadow_mode_cb.isChecked())
-                if self.manual_sell_btn and self.shadow_mode_cb:
-                    self.manual_sell_btn.setEnabled(not self.shadow_mode_cb.isChecked())
+                if self.manual_buy_btn:
+                    self.manual_buy_btn.setEnabled(self.controller.is_connected)
+                if self.manual_sell_btn:
+                    self.manual_sell_btn.setEnabled(self.controller.is_connected)
             else:
                 if self.bot_status:
                     self.bot_status.setText("⚪ Stopped")
