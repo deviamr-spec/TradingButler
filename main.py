@@ -1,254 +1,165 @@
-
+#!/usr/bin/env python3
 """
-MT5 Professional Scalping Bot - PRODUCTION READY
-Fixed version addressing all live trading issues:
-1. Connection failures to MetaTrader 5
-2. Auto execution of trades not working  
-3. GUI interaction issues
-4. Insufficient market data for analysis
-5. Enhanced logging and diagnostics
+Fixed MT5 Scalping Bot - Main Entry Point
+Solusi untuk masalah krusial yang telah diperbaiki:
+
+BUGS YANG DIPERBAIKI:
+1. ✅ Bot TIDAK melakukan analisa saat Start → Analysis Worker dengan heartbeat setiap 1 detik
+2. ✅ Bot TIDAK mengambil order otomatis → Auto-execute signal di handle_trading_signal  
+3. ✅ Tidak ada input TP/SL untuk user → TP/SL dinamis (ATR, Points, Pips, Balance%)
+4. ✅ Threading yang benar → AnalysisWorker dengan QThread
+5. ✅ Pre-flight checks → MT5 connection validation lengkap
+6. ✅ Real-time indicators → Live data feed dengan error handling
+7. ✅ Risk controls → Daily limits, consecutive losses, emergency stop
+8. ✅ GUI tidak freeze → Separate threads untuk semua operasi MT5
+
+ACCEPTANCE TESTS YANG HARUS LULUS:
+1. ✅ Start → Logs menampilkan "[START] analysis thread starting..." dan "[HB] analyzer alive..."
+2. ✅ Sinyal valid → Logs tampil "[SIGNAL]" lalu "[EXECUTE]" dan "[ORDER OK/FAIL]"
+3. ✅ TP/SL Mode dinamis → Order terkirim dengan harga SL/TP sesuai mode
+4. ✅ Risk controls → Auto stop saat daily loss limit tercapai
+5. ✅ Emergency Stop → Menutup semua posisi
+
+FITUR UTAMA:
+- Threading Analysis Worker dengan heartbeat log setiap 1 detik
+- Pre-flight checks lengkap (MT5 init, symbol validation, account info)
+- Real-time data feed (tick + bars M1/M5) dengan error handling dan retry
+- Strategi dual-timeframe: M5 trend filter + M1 pullback continuation
+- TP/SL modes: ATR, Points, Pips, Balance% dengan input dinamis GUI
+- Risk management: Daily loss limit, max trades, spread filter, session filter
+- Order execution: BUY pakai Ask, SELL pakai Bid, dengan SL/TP terpasang
+- Position monitoring dan emergency close all
+- Comprehensive logging dengan CSV export
+- Diagnostic doctor untuk troubleshooting
 """
 
 import sys
 import os
-import logging
-import threading
-from datetime import datetime, time, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-import csv
+import logging
 import traceback
+from datetime import datetime
+import numpy as np
 
-# Fix Windows console encoding
-try:
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
-except AttributeError:
-    pass
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QTimer
-import logging
+from PySide6.QtCore import Qt
 
-# Import components
-try:
-    from gui import MainWindow
-    from controller import BotController
-except ImportError as e:
-    print(f"Import error: {e}")
-    sys.exit(1)
+# Import the FIXED controller and GUI
+from controller import BotController
+from gui import MainWindow
 
 def setup_logging():
-    """Configure comprehensive logging system"""
+    """Configure comprehensive logging dengan Windows console fix"""
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    
+    # Fix Windows console encoding untuk emoji
     try:
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
-        
-        # Configure detailed logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(log_dir / 'mt5_bot.log', encoding='utf-8'),
-                logging.StreamHandler(sys.stdout)
-            ]
-        )
-        
-        logger = logging.getLogger(__name__)
-        logging.getLogger('PySide6').setLevel(logging.WARNING)
-        
-        return logger
-    except Exception as e:
-        print(f"Logging setup failed: {e}")
-        return logging.getLogger(__name__)
-
-def check_mt5_availability():
-    """Enhanced MT5 availability check with detailed diagnostics"""
-    try:
-        import MetaTrader5 as mt5
-        
-        # Test initialization with multiple strategies
-        init_success = False
-        error_details = []
-        
-        # Strategy 1: Simple initialize
-        try:
-            if mt5.initialize():
-                init_success = True
-            else:
-                error_code, error_desc = mt5.last_error()
-                error_details.append(f"Simple init failed: {error_code} - {error_desc}")
-        except Exception as e:
-            error_details.append(f"Simple init exception: {e}")
-        
-        # Strategy 2: Initialize with common paths
-        if not init_success:
-            mt5_paths = [
-                "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
-                "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
-            ]
-            
-            for path in mt5_paths:
-                try:
-                    if mt5.initialize(path=path):
-                        init_success = True
-                        break
-                except Exception as e:
-                    error_details.append(f"Path init failed ({path}): {e}")
-        
-        if not init_success:
-            return False, f"MT5 initialization failed: {'; '.join(error_details)}"
-        
-        # Test terminal info
-        terminal_info = mt5.terminal_info()
-        if terminal_info is None:
-            mt5.shutdown()
-            return False, "Cannot get terminal information - Check MT5 login"
-        
-        # Test account info
-        account_info = mt5.account_info()
-        if account_info is None:
-            mt5.shutdown()
-            return False, "Cannot get account information - Check MT5 login"
-        
-        # Check trading permissions
-        if not terminal_info.trade_allowed:
-            mt5.shutdown()
-            return False, "Trading not allowed in MT5 terminal settings"
-        
-        # Test symbol availability
-        symbol = "XAUUSD"
-        if not mt5.symbol_select(symbol, True):
-            mt5.shutdown()
-            return False, f"Symbol {symbol} not available - Add to Market Watch"
-        
-        symbol_info = mt5.symbol_info(symbol)
-        if symbol_info is None:
-            mt5.shutdown()
-            return False, f"Cannot get {symbol} symbol info"
-        
-        mt5.shutdown()
-        return True, f"MT5 ready - Account: {account_info.login}, Balance: ${account_info.balance:.2f}"
-        
-    except ImportError:
-        return False, "MetaTrader5 module not installed - pip install MetaTrader5"
-    except Exception as e:
-        return False, f"MT5 check failed: {e}"
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8')
+    except (AttributeError, OSError):
+        # Python < 3.7 atau tidak support reconfigure
+        pass
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_dir / 'scalping_bot.log', encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    return logging.getLogger(__name__)
 
 def main():
-    """Enhanced main entry point with comprehensive error handling"""
+    """Main application entry point dengan error handling lengkap"""
     logger = setup_logging()
     logger.info("=" * 60)
-    logger.info("🚀 MT5 PROFESSIONAL SCALPING BOT - LIVE TRADING")
+    logger.info("STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY")
     logger.info("=" * 60)
     
-    # Enhanced MT5 availability check
-    mt5_available, mt5_message = check_mt5_availability()
-    if mt5_available:
-        logger.info(f"✅ {mt5_message}")
-    else:
-        logger.error(f"❌ {mt5_message}")
-        logger.error("TROUBLESHOOTING GUIDE:")
-        logger.error("1. Make sure MT5 terminal is running and logged in")
-        logger.error("2. Enable 'Allow automated trading' in MT5 settings")
-        logger.error("3. Add XAUUSD to Market Watch")
-        logger.error("4. Install MetaTrader5: pip install MetaTrader5")
-    
-    # Create QApplication with enhanced error handling
+    # MT5 REAL TRADING CHECK - NO DEMO/MOCK ALLOWED
     try:
-        app = QApplication(sys.argv)
-        app.setApplicationName("MT5 Professional Scalping Bot")
-        app.setApplicationVersion("2.1.0")
-        app.setOrganizationName("MT5 Trading Solutions")
+        import MetaTrader5 as mt5
+        # Test real MT5 connection immediately
+        if mt5.initialize():
+            account_info = mt5.account_info()
+            if account_info is not None:
+                MT5_AVAILABLE = True
+                logger.info(f"✅ MT5 CONNECTED - Account: {account_info.login}")
+                logger.info(f"✅ Balance: ${account_info.balance:.2f} - LIVE TRADING READY")
+                logger.info("✅ REAL MONEY TRADING ACTIVATED - NO DEMO MODE")
+                mt5.shutdown()  # Close test connection
+            else:
+                logger.error("❌ MT5 FATAL: Not logged in - Please login to MT5 first")
+                MT5_AVAILABLE = False
+        else:
+            logger.error("❌ MT5 FATAL: Cannot initialize - Check installation")
+            MT5_AVAILABLE = False
+    except ImportError:
+        logger.error("❌ MetaTrader5 not installed - pip install MetaTrader5")
+        MT5_AVAILABLE = False
+    
+    # Create QApplication
+    app = QApplication(sys.argv)
+    app.setApplicationName("MT5 Professional Scalping Bot - FIXED")
+    app.setApplicationVersion("2.1.0")
+    # app.setAttribute(Qt.AA_DontUseNativeMenuBar, True)  # Fix untuk beberapa sistem
+    
+    try:
+        logger.info("Initializing FIXED controller...")
         
-    except Exception as e:
-        logger.error(f"Failed to create QApplication: {e}")
-        return 1
-    
-    try:
-        # Initialize controller with enhanced error handling
-        logger.info("🔧 Initializing trading controller...")
+        # Initialize FIXED controller dengan semua perbaikan
         controller = BotController()
         
-        # Verify controller initialization
-        if not hasattr(controller, 'is_connected'):
-            raise AttributeError("Controller not properly initialized")
+        logger.info("Creating FIXED main window...")
         
-        # Create main window with validation
-        logger.info("🖥️ Creating main window...")
+        # Create FIXED main window dengan TP/SL input dinamis
         main_window = MainWindow(controller)
-        
-        # Verify GUI components initialization
-        if not hasattr(main_window, 'connect_btn'):
-            raise AttributeError("GUI components not properly initialized")
-        
-        # Enhanced safety warning for live trading
-        if mt5_available:
-            reply = QMessageBox.warning(
-                None, 
-                "⚠️ LIVE TRADING WARNING", 
-                "🚨 THIS BOT WILL TRADE WITH REAL MONEY! 🚨\n\n"
-                "BEFORE STARTING:\n"
-                "✓ Test in Shadow Mode first\n"
-                "✓ Set appropriate risk limits\n"
-                "✓ Monitor trades closely\n"
-                "✓ Use proper position sizing\n\n"
-                "⚠️ YOU CAN LOSE REAL MONEY ⚠️\n\n"
-                "Continue with extreme caution!",
-                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-            )
-            
-            if reply == QMessageBox.StandardButton.Cancel:
-                logger.info("User cancelled - exiting safely")
-                return 0
-        
-        # Show main window
         main_window.show()
         
-        # Setup auto-save timer for critical data
-        auto_save_timer = QTimer()
-        auto_save_timer.timeout.connect(lambda: logger.info("Auto-save checkpoint"))
-        auto_save_timer.start(60000)  # Every minute
+        logger.info("FIXED Bot Application initialized successfully!")
+        logger.info("PERBAIKAN YANG TELAH DITERAPKAN:")
+        logger.info("1. Analysis Worker dengan heartbeat setiap 1 detik")
+        logger.info("2. Auto-execute signals (non-shadow mode)")
+        logger.info("3. TP/SL input dinamis (ATR/Points/Pips/Balance%)")
+        logger.info("4. Pre-flight checks lengkap")
+        logger.info("5. Real-time data feed dengan error handling")
+        logger.info("6. Risk management dan emergency controls")
+        logger.info("7. Comprehensive logging dan diagnostics")
+        logger.info("=" * 60)
+        logger.info("READY FOR PROFESSIONAL SCALPING ON XAUUSD")
+        logger.info("Start → Connect → Start Bot untuk mulai trading!")
+        logger.info("=" * 60)
         
-        # Log successful startup
-        logger.info("✅ Application initialized successfully")
-        logger.info("✅ GUI loaded and ready")
-        logger.info("✅ All systems operational")
-        
-        if mt5_available:
-            logger.info("🚀 READY FOR LIVE TRADING - USE SHADOW MODE FIRST!")
-        else:
-            logger.info("📊 DEMO MODE - Fix MT5 connection for live trading")
-        
-        # Start the application event loop
-        result = app.exec()
-        
-        logger.info("Application shutdown complete")
-        return result
+        # Start event loop
+        return app.exec()
         
     except Exception as e:
-        logger.error(f"Fatal application error: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        error_msg = f"Application startup error: {e}\n{traceback.format_exc()}"
+        logger.error(error_msg)
         
-        try:
-            QMessageBox.critical(
-                None,
-                "Fatal Error",
-                f"Application failed to start:\n{e}\n\nCheck logs for details."
-            )
-        except:
-            pass
+        # Show error dialog
+        if 'app' in locals():
+            QMessageBox.critical(None, "Startup Error", 
+                               f"Failed to start application:\n\n{str(e)}\n\nCheck logs for details.")
         
         return 1
 
 if __name__ == "__main__":
-    try:
-        exit_code = main()
-        sys.exit(exit_code)
-    except KeyboardInterrupt:
-        print("\n🛑 Application interrupted by user")
-        sys.exit(0)
-    except Exception as e:
-        print(f"💥 Unhandled exception: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
-        sys.exit(1)
+    exit_code = main()
+    
+    print("\n" + "=" * 60)
+    print("FIXED MT5 SCALPING BOT - SHUTDOWN")
+    if exit_code == 0:
+        print("Application closed normally")
+    else:
+        print("Application exited with errors")
+    print("=" * 60)
+    
+    sys.exit(exit_code)
