@@ -1,0 +1,33 @@
+Kamu adalah AI senior developer yang bertugas mengaudit dan memperbaiki penuh seluruh proyek bot trading MT5 ini agar:
+
+1. **Siap digunakan untuk live trading uang asli di Windows** dengan MetaTrader 5, bukan demo atau dummy.
+2. **Harus 100% bekerja tanpa bug atau freeze**, termasuk di bagian GUI, analisa market, auto-buy, auto-sell, TP/SL, dan koneksi MT5.
+3. **Tidak boleh ada file dummy, mock, sandbox, demo, atau logika pura-pura**. Semua order harus terkirim langsung ke akun MT5 real yang terkoneksi.
+4. **GUI harus berfungsi penuh**: bisa dibuka tanpa freeze, menampilkan data real-time, menerima input user, menampilkan status akun, posisi terbuka, history, dan parameter strategi.
+5. **Analisa market & strategi trading harus berjalan otomatis**:
+   - Mengambil data harga real dari MT5
+   - Menghitung indikator & sinyal secara real-time
+   - Mengeksekusi order buy/sell sesuai strategi
+   - Bisa pilih TP/SL berdasarkan **persentase, harga, nominal uang, atau pips**
+6. **Koneksi MT5 wajib auto-reconnect** jika terputus.
+7. **Symbol tidak boleh hanya hiasan**:
+   - User bisa input symbol manual
+   - Atau autodetect symbol default akun
+8. **Threading & event-loop harus benar**:
+   - Semua operasi berat (data feed, indikator, eksekusi order) di thread terpisah
+   - Main thread hanya untuk GUI
+   - Tidak boleh ada `while True` atau `time.sleep()` di thread GUI
+9. **Harus kompatibel penuh dengan Windows**:
+   - Tidak ada path hardcode Linux/Mac
+   - Menggunakan `pathlib` atau cara cross-platform
+10. **Audit & perbaikan harus mendalam**:
+    - Cek semua file & modul
+    - Cari dan perbaiki semua bug logika, sinyal, performa, memori, threading, dan koneksi
+    - Pastikan semua fitur yang ada di bobot2.py minimal sama atau lebih baik
+11. **Beri laporan audit akhir**:
+    - Daftar semua bug & masalah yang ditemukan
+    - Perubahan yang dilakukan
+    - Hasil tes fungsi setelah perbaikan
+    - Bukti bahwa bot bisa buka GUI, analisa market, dan eksekusi order real di MT5 Windows tanpa bug
+
+Gunakan file `bot3.py` sebagai referensi untuk logika koneksi, dan pastikan seluruh sistem diuji sampai benar-benar siap dipakai live trading di Windows.

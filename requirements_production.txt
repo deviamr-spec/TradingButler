@@ -1,0 +1,23 @@
+
+# Production MT5 Scalping Bot Requirements for Windows
+# Install with: pip install -r requirements_production.txt
+
+# Core GUI Framework
+PySide6>=6.4.0
+
+# MetaTrader 5 API (CRITICAL for Windows)
+MetaTrader5>=5.0.37
+
+# Data Processing
+numpy>=1.24.0
+pandas>=1.5.0
+
+# Timezone handling
+pytz>=2022.7
+
+# Optional: Enhanced logging
+colorlog>=6.7.0
+
+# Development tools (optional)
+pytest>=7.2.0
+black>=22.10.0

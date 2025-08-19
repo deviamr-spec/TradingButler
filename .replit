@@ -1,0 +1,75 @@
+modules = ["python-3.11"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["fontconfig", "freetype", "glib", "glibcLocales", "libGL", "libxcrypt", "libxkbcommon", "mesa", "qt6.qtbase", "xorg.libX11", "xorg.libXext"]
+
+[workflows]
+runButton = "MT5 Production Final"
+
+[[workflows.workflow]]
+name = "MT5 Real Trading Bot"
+author = 46394143
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[[workflows.workflow]]
+name = "MT5 Trading Bot"
+author = 46394143
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Fixed MT5 Scalping Bot"
+
+[[workflows.workflow]]
+name = "Fixed MT5 Scalping Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python fixed_main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Production MT5 Bot"
+author = 46416872
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python production_mt5_bot.py"
+
+[[workflows.workflow]]
+name = "MT5 Production Bot"
+author = 46416872
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main_production.py"
+
+[[workflows.workflow]]
+name = "MT5 Production Final"
+author = 46416872
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python mt5_production_final.py"
