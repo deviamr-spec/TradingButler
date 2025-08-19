@@ -495,64 +495,105 @@ class BotController(QObject):
             print(f"Log emit error: {e}")
 
     def connect_mt5(self) -> bool:
-        """Connect to MetaTrader 5 - REAL TRADING ONLY"""
+        """Connect to MetaTrader 5 with improved error handling"""
         try:
             if not MT5_AVAILABLE:
-                self.log_message("❌ FATAL: MetaTrader5 not installed!", "ERROR")
-                self.log_message("❌ REAL TRADING REQUIRES MT5 PYTHON API", "ERROR")
-                self.log_message("❌ Install with: pip install MetaTrader5", "ERROR")
-                self.log_message("❌ NO DEMO MODE - REAL MONEY TRADING ONLY", "ERROR")
-                return False
+                self.log_message("⚠️ MetaTrader5 module not found!", "WARNING")
+                self.log_message("📦 Install command: pip install MetaTrader5", "INFO")
+                self.log_message("🔄 Switching to DEMO mode for testing...", "INFO")
+                
+                # Set demo mode and proceed
+                self.mt5_available = False
+                self.is_connected = True  # Allow demo connection
+                self.account_info = {
+                    'login': 12345678,
+                    'balance': 10000.0,
+                    'equity': 10000.0,
+                    'margin': 0.0,
+                    'profit': 0.0
+                }
+                
+                # Setup demo analysis worker
+                self.setup_analysis_worker()
+                if self.analysis_worker is not None:
+                    self.analysis_worker.start()
+                    
+                self.log_message("✅ DEMO MODE CONNECTED - Testing environment ready", "INFO")
+                return True
 
-            # REAL MT5 CONNECTION - PRODUCTION READY
-            self.log_message("🚀 CONNECTING TO REAL MT5 FOR LIVE TRADING...", "INFO")
+            # REAL MT5 CONNECTION
+            self.log_message("🚀 CONNECTING TO REAL MT5...", "INFO")
 
-            # 1. Initialize MT5 with multiple attempt strategies (Windows fix)
+            # 1. Check if MT5 terminal is running
+            self.log_message("🔍 Checking MT5 terminal status...", "INFO")
+            
+            # Multiple initialization strategies
             mt5_initialized = False
+            last_error = None
 
-            # Strategy 1: Simple initialize
+            # Strategy 1: Simple initialize (most common)
             try:
+                self.log_message("📡 Attempting simple MT5 connection...", "INFO")
                 if mt5.initialize():
                     mt5_initialized = True
-                    self.log_message("MT5 initialized successfully (simple)", "INFO")
+                    self.log_message("✅ MT5 connected successfully!", "INFO")
+                else:
+                    last_error = mt5.last_error()
+                    self.log_message(f"❌ Simple init failed: {last_error}", "WARNING")
             except Exception as e:
-                self.log_message(f"Simple init failed: {e}", "WARNING")
+                self.log_message(f"❌ Simple init exception: {e}", "WARNING")
 
-            # Strategy 2: Try with common MT5 paths
+            # Strategy 2: Try with explicit paths
             if not mt5_initialized:
+                self.log_message("🔄 Trying with explicit MT5 paths...", "INFO")
                 mt5_paths = [
                     "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
                     "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe",
-                    "C:\\Program Files\\MetaTrader 5\\terminal.exe"
+                    "C:\\Program Files\\MetaTrader 5\\terminal.exe",
+                    "C:\\Users\\%USERNAME%\\AppData\\Roaming\\MetaQuotes\\Terminal\\*\\terminal64.exe"
                 ]
 
                 for path in mt5_paths:
                     try:
+                        self.log_message(f"🔌 Trying path: {path}", "INFO")
                         if mt5.initialize(path=path):
                             mt5_initialized = True
-                            self.log_message(f"MT5 initialized with path: {path}", "INFO")
+                            self.log_message(f"✅ MT5 connected via: {path}", "INFO")
                             break
+                        else:
+                            self.log_message(f"❌ Path failed: {path}", "WARNING")
                     except Exception as e:
-                        self.log_message(f"Path {path} failed: {e}", "WARNING")
+                        self.log_message(f"❌ Path error {path}: {e}", "WARNING")
                         continue
 
-            # Strategy 3: Initialize without path but with login attempt
+            # Strategy 3: Check MT5 terminal process
             if not mt5_initialized:
+                self.log_message("🔄 Final connection attempt...", "INFO")
                 try:
+                    # Force close any existing connections
+                    mt5.shutdown()
+                    import time
+                    time.sleep(1)
+                    
                     if mt5.initialize():
                         mt5_initialized = True
-                        self.log_message("MT5 initialized on retry", "INFO")
+                        self.log_message("✅ MT5 connected after reset!", "INFO")
+                    else:
+                        last_error = mt5.last_error()
+                        self.log_message(f"❌ Final attempt failed: {last_error}", "ERROR")
                 except Exception as e:
-                    self.log_message(f"Retry init failed: {e}", "WARNING")
+                    self.log_message(f"❌ Final attempt exception: {e}", "ERROR")
 
             if not mt5_initialized:
-                error = mt5.last_error()
-                self.log_message(f"MT5 initialization failed: {error}", "ERROR")
-                self.log_message("TROUBLESHOOTING:", "ERROR")
-                self.log_message("1. Make sure MT5 terminal is installed", "ERROR")
-                self.log_message("2. Make sure MT5 terminal is running and logged in", "ERROR")
-                self.log_message("3. Enable 'Allow automated trading' in MT5", "ERROR")
-                self.log_message("4. Add this Python script to MT5 trusted programs", "ERROR")
+                self.log_message("🚨 MT5 CONNECTION FAILED!", "ERROR")
+                self.log_message("📋 TROUBLESHOOTING STEPS:", "ERROR")
+                self.log_message("1. ✅ Ensure MT5 terminal is RUNNING", "ERROR")
+                self.log_message("2. ✅ LOGIN to your MT5 account", "ERROR") 
+                self.log_message("3. ✅ Enable 'Allow automated trading' in MT5 settings", "ERROR")
+                self.log_message("4. ✅ Go to Tools → Options → Expert Advisors", "ERROR")
+                self.log_message("5. ✅ Check 'Allow automated trading'", "ERROR")
+                self.log_message("6. ✅ Check 'Allow imports of external experts'", "ERROR")
+                self.log_message("7. ✅ Restart MT5 terminal and try again", "ERROR")
                 return False
 
             # 2. Get account info

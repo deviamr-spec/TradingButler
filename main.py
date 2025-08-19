@@ -132,10 +132,10 @@ def main():
             print("="*60)
             return 1
 
-    # Reject startup if no real MT5
+    # Allow startup even without MT5 for development/testing
     if not MT5_AVAILABLE:
-        logger.error("❌ STARTUP REJECTED - REAL MT5 REQUIRED")
-        return 1
+        logger.warning("⚠️ MT5 module not available - Demo mode will be used")
+        logger.info("For live trading, install MetaTrader5: pip install MetaTrader5")
 
     # Create QApplication
     app = QApplication(sys.argv)

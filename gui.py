@@ -862,16 +862,46 @@ class MainWindow(QMainWindow):
 
     # EVENT HANDLERS
     def on_connect(self):
-        """Handle connect button"""
+        """Handle connect button with detailed error messages"""
         try:
+            self.log_message("🔄 Attempting MT5 connection...", "INFO")
+            
             if self.controller.connect_mt5():
                 self.update_connection_status(True)
                 self.start_btn.setEnabled(True)
-                QMessageBox.information(self, "Connection", "Successfully connected to MT5")
+                
+                # Check if it's demo or real connection
+                if self.controller.mt5_available:
+                    QMessageBox.information(self, "✅ Connection Success", 
+                                          "Successfully connected to REAL MT5!\n"
+                                          "Ready for live trading.")
+                else:
+                    QMessageBox.information(self, "⚠️ Demo Mode", 
+                                          "Connected in DEMO mode.\n"
+                                          "Install MetaTrader5 module for live trading:\n"
+                                          "pip install MetaTrader5")
             else:
-                QMessageBox.warning(self, "Connection Error", "Failed to connect to MT5")
+                self.update_connection_status(False)
+                QMessageBox.critical(self, "❌ Connection Failed", 
+                                   "Failed to connect to MT5!\n\n"
+                                   "TROUBLESHOOTING:\n"
+                                   "1. Make sure MT5 terminal is RUNNING\n"
+                                   "2. LOGIN to your trading account\n"
+                                   "3. Enable 'Allow automated trading'\n"
+                                   "4. Check Tools → Options → Expert Advisors\n"
+                                   "5. Restart MT5 and try again\n\n"
+                                   "Check logs for detailed error information.")
+                
         except Exception as e:
-            QMessageBox.critical(self, "Connection Error", f"Connection failed: {e}")
+            self.update_connection_status(False)
+            error_msg = f"Connection failed: {str(e)}"
+            self.log_message(error_msg, "ERROR")
+            QMessageBox.critical(self, "Connection Error", 
+                               f"Connection failed with error:\n\n{error_msg}\n\n"
+                               "Please check that:\n"
+                               "• MT5 terminal is running\n"
+                               "• You are logged into your account\n"
+                               "• Automated trading is enabled")
 
     def on_disconnect(self):
         """Handle disconnect button"""
