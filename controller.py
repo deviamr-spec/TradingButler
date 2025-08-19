@@ -1,9 +1,7 @@
+
 """
-Fixed MT5 Scalping Bot Controller - PRODUCTION READY
-Solusi untuk masalah krusial:
-1. Threading analysis worker dengan heartbeat
-2. Auto-order execution setelah sinyal
-3. TP/SL modes (ATR, Points, Pips, Balance%)
+FIXED MT5 Scalping Bot Controller - PRODUCTION READY
+Complete fixes for MT5 connection and auto-trading
 """
 
 import sys
@@ -23,19 +21,23 @@ from PySide6.QtWidgets import QMessageBox
 # Import configuration
 from config import *
 
+# MANDATORY MT5 CONNECTION - NO MOCK FALLBACK
 try:
     import MetaTrader5 as mt5
     MT5_AVAILABLE = True
+    print("✅ MetaTrader5 module loaded successfully")
 except ImportError:
     MT5_AVAILABLE = False
-    print("⚠️ MetaTrader5 not available - Running in demo mode")
-    import mock_mt5 as mt5
+    print("❌ CRITICAL: MetaTrader5 module not installed!")
+    print("❌ Install command: pip install MetaTrader5")
+    print("❌ Real trading REQUIRES MetaTrader5 Python API")
+    # NO MOCK IMPORT - Force real MT5 only
 
 # Import indicators
 from indicators import TechnicalIndicators
 
 class AnalysisWorker(QThread):
-    """Worker thread untuk analisis real-time dengan heartbeat"""
+    """Enhanced Analysis Worker for real-time trading signals"""
 
     # Signals
     heartbeat_signal = Signal(str)
@@ -51,344 +53,329 @@ class AnalysisWorker(QThread):
         self.indicators = TechnicalIndicators()
         self.last_m1_time = None
         self.logger = logging.getLogger(__name__)
-        self.demo_price = 3335.0  # Base price for demo mode
+        
+        # Remove demo mode completely
+        self.last_signal_time = 0
+        self.signal_cooldown = 5  # 5 seconds between signals
 
     def run(self):
-        """Main analysis loop dengan heartbeat setiap 1 detik"""
+        """Main analysis loop dengan enhanced strategy"""
         self.running = True
-        self.logger.info("[START] analysis thread starting...")
+        self.logger.info("[WORKER] Analysis thread starting for REAL trading...")
 
         try:
             while self.running:
                 current_time = datetime.now(pytz.timezone('Asia/Jakarta'))
 
-                # HEARTBEAT LOG - WAJIB setiap 1 detik
+                # MANDATORY: Check MT5 connection first
+                if not self.controller.is_connected or not MT5_AVAILABLE:
+                    self.heartbeat_signal.emit(f"[HB] WAITING MT5 CONNECTION t={current_time.strftime('%H:%M:%S')}")
+                    self.msleep(1000)
+                    continue
+
                 try:
-                    m1_bars = self.get_bars_count('M1')
-                    m5_bars = self.get_bars_count('M5')
-                    heartbeat_msg = f"[HB] analyzer alive t={current_time.isoformat()} bars(M1)={m1_bars} bars(M5)={m5_bars}"
-                    self.heartbeat_signal.emit(heartbeat_msg)
+                    # 1. Heartbeat with connection verification
+                    if not self.verify_mt5_connection():
+                        self.error_signal.emit("MT5 connection lost - attempting reconnect")
+                        self.msleep(2000)
+                        continue
+
+                    # 2. Market data analysis
+                    market_data = self.get_market_data()
+                    if market_data:
+                        self.tick_data_signal.emit(market_data)
+
+                    # 3. Technical analysis
+                    analysis_result = self.perform_technical_analysis()
+                    if analysis_result:
+                        self.indicators_ready.emit(analysis_result)
+
+                    # 4. Signal generation
+                    signal = self.generate_trading_signal(analysis_result)
+                    if signal and signal.get('side'):
+                        # Cooldown check
+                        if (time.time() - self.last_signal_time) > self.signal_cooldown:
+                            self.signal_ready.emit(signal)
+                            self.last_signal_time = time.time()
+
+                    # 5. Heartbeat log
+                    spread = market_data.get('spread_points', 0) if market_data else 0
+                    signal_status = signal.get('side', 'NONE') if signal else 'NONE'
+                    self.heartbeat_signal.emit(
+                        f"[HB] LIVE t={current_time.strftime('%H:%M:%S')} spread={spread}pts signal={signal_status}"
+                    )
+
                 except Exception as e:
-                    self.heartbeat_signal.emit(f"[HB] analyzer alive t={current_time.isoformat()} bars(M1)=ERROR bars(M5)=ERROR")
+                    error_msg = f"Analysis error: {e}"
+                    self.error_signal.emit(error_msg)
+                    self.logger.error(error_msg)
 
-                if self.controller.is_connected:
-                    try:
-                        # 1. Ambil tick data
-                        self.fetch_tick_data()
-
-                        # 2. Ambil bar data dan hitung indikator
-                        self.fetch_and_analyze_data()
-
-                        # 3. Generate signals
-                        self.generate_signals()
-
-                    except Exception as e:
-                        error_msg = f"Analysis worker error: {e}\n{traceback.format_exc()}"
-                        self.error_signal.emit(error_msg)
-                        self.logger.error(error_msg)
-
-                self.msleep(1000)  # 1 second heartbeat
+                self.msleep(1000)  # 1 second cycle
 
         except Exception as e:
             error_msg = f"Analysis worker fatal error: {e}\n{traceback.format_exc()}"
             self.error_signal.emit(error_msg)
             self.logger.error(error_msg)
 
-    def get_bars_count(self, timeframe):
-        """Get jumlah bars untuk heartbeat"""
+    def verify_mt5_connection(self):
+        """Verify MT5 connection is still active"""
         try:
-            if not self.controller.is_connected:
-                return 0
-
-            tf_map = {'M1': mt5.TIMEFRAME_M1, 'M5': mt5.TIMEFRAME_M5}
-            if MT5_AVAILABLE:
-                rates = mt5.copy_rates_from_pos(self.controller.config['symbol'], tf_map[timeframe], 0, 10)
-                return len(rates) if rates is not None else 0
-            else:
-                return 200  # Demo mode
+            # Test connection with account info
+            account_info = mt5.account_info()
+            return account_info is not None
         except:
-            return 0
+            return False
 
-    def generate_demo_bars(self, count, timeframe):
-        """Generate demo OHLC data for testing"""
-        import random
-        bars = []
-
-        for i in range(count):
-            # Simulate price movement
-            price_change = random.uniform(-2.0, 2.0)
-            self.demo_price += price_change * 0.1
-
-            # Generate realistic OHLC
-            close = self.demo_price
-            open_price = close + random.uniform(-0.5, 0.5)
-            high = max(open_price, close) + random.uniform(0, 1.0)
-            low = min(open_price, close) - random.uniform(0, 1.0)
-
-            bar = {
-                'time': int(datetime.now().timestamp()) - (count - i) * 60,
-                'open': open_price,
-                'high': high,
-                'low': low,
-                'close': close,
-                'tick_volume': random.randint(100, 1000),
-                'spread': random.randint(20, 50),
-                'real_volume': 0
-            }
-            bars.append(bar)
-
-        return np.array([(b['time'], b['open'], b['high'], b['low'], b['close'], b['tick_volume'], b['spread'], b['real_volume']) 
-                        for b in bars], 
-                       dtype=[('time', 'i8'), ('open', 'f8'), ('high', 'f8'), ('low', 'f8'), 
-                             ('close', 'f8'), ('tick_volume', 'i8'), ('spread', 'i4'), ('real_volume', 'i8')])
-
-    def fetch_tick_data(self):
-        """Fetch tick data setiap 250-500ms"""
+    def get_market_data(self):
+        """Get current market data from MT5"""
         try:
             symbol = self.controller.config['symbol']
-
-            if MT5_AVAILABLE:
-                tick = mt5.symbol_info_tick(symbol)
-            else:
-                # Demo tick data with realistic spread
-                import random
-                spread = random.uniform(0.20, 0.50)
-                bid = self.demo_price + random.uniform(-0.5, 0.5)
-                ask = bid + spread
-
-                tick = type('MockTick', (), {
-                    'bid': bid,
-                    'ask': ask,
-                    'last': (bid + ask) / 2,
-                    'time': int(datetime.now().timestamp())
-                })()
-
-            if tick:
-                point = getattr(self.controller.symbol_info, 'point', 0.01)
-                spread_points = round((tick.ask - tick.bid) / point)
-                tick_data = {
-                    'bid': tick.bid,
-                    'ask': tick.ask,
-                    'spread_points': spread_points,
-                    'time': datetime.now()
-                }
-                self.tick_data_signal.emit(tick_data)
-
-        except Exception as e:
-            self.logger.error(f"Tick fetch error: {e}")
-
-    def fetch_and_analyze_data(self):
-        """Fetch bars dan hitung indikator"""
-        try:
-            symbol = self.controller.config['symbol']
-
-            # Ambil M1 dan M5 bars
-            if MT5_AVAILABLE:
-                rates_m1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 200)
-                rates_m5 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M5, 0, 200)
-            else:
-                # DEMO MODE - Generate mock data for testing
-                rates_m1 = self.generate_demo_bars(200, 'M1')
-                rates_m5 = self.generate_demo_bars(200, 'M5')
-
-            if rates_m1 is None or rates_m5 is None or len(rates_m1) < 50:
-                if not MT5_AVAILABLE:
-                    self.logger.info("[DEMO] Using generated market data for analysis...")
-                else:
-                    self.logger.warning("Insufficient bar data, retrying...")
-                    return
-
-            # Hitung indikator M1
-            close_m1 = rates_m1['close']
-            high_m1 = rates_m1['high']
-            low_m1 = rates_m1['low']
-
-            ema_fast_m1 = self.indicators.ema(close_m1, self.controller.config['ema_periods']['fast'])
-            ema_medium_m1 = self.indicators.ema(close_m1, self.controller.config['ema_periods']['medium'])
-            ema_slow_m1 = self.indicators.ema(close_m1, self.controller.config['ema_periods']['slow'])
-            rsi_m1 = self.indicators.rsi(close_m1, self.controller.config['rsi_period'])
-            atr_m1 = self.indicators.atr(high_m1, low_m1, close_m1, self.controller.config['atr_period'])
-
-            # Hitung indikator M5
-            close_m5 = rates_m5['close']
-            high_m5 = rates_m5['high']
-            low_m5 = rates_m5['low']
-
-            ema_fast_m5 = self.indicators.ema(close_m5, self.controller.config['ema_periods']['fast'])
-            ema_medium_m5 = self.indicators.ema(close_m5, self.controller.config['ema_periods']['medium'])
-            ema_slow_m5 = self.indicators.ema(close_m5, self.controller.config['ema_periods']['slow'])
-            rsi_m5 = self.indicators.rsi(close_m5, self.controller.config['rsi_period'])
-            atr_m5 = self.indicators.atr(high_m5, low_m5, close_m5, self.controller.config['atr_period'])
-
-            # Update controller indicators
-            self.controller.current_indicators['M1'] = {
-                'ema_fast': ema_fast_m1[-1] if len(ema_fast_m1) > 0 and not np.isnan(ema_fast_m1[-1]) else 0,
-                'ema_medium': ema_medium_m1[-1] if len(ema_medium_m1) > 0 and not np.isnan(ema_medium_m1[-1]) else 0,
-                'ema_slow': ema_slow_m1[-1] if len(ema_slow_m1) > 0 and not np.isnan(ema_slow_m1[-1]) else 0,
-                'rsi': rsi_m1[-1] if len(rsi_m1) > 0 and not np.isnan(rsi_m1[-1]) else 50,
-                'atr': atr_m1[-1] if len(atr_m1) > 0 and not np.isnan(atr_m1[-1]) else 0,
-                'close': close_m1[-1],
-                'rates': rates_m1
-            }
-
-            self.controller.current_indicators['M5'] = {
-                'ema_fast': ema_fast_m5[-1] if len(ema_fast_m5) > 0 and not np.isnan(ema_fast_m5[-1]) else 0,
-                'ema_medium': ema_medium_m5[-1] if len(ema_medium_m5) > 0 and not np.isnan(ema_medium_m5[-1]) else 0,
-                'ema_slow': ema_slow_m5[-1] if len(ema_slow_m5) > 0 and not np.isnan(ema_slow_m5[-1]) else 0,
-                'rsi': rsi_m5[-1] if len(rsi_m5) > 0 and not np.isnan(rsi_m5[-1]) else 50,
-                'atr': atr_m5[-1] if len(atr_m5) > 0 and not np.isnan(atr_m5[-1]) else 0,
-                'close': close_m5[-1],
-                'rates': rates_m5
-            }
-
-            # Emit indicators ready signal
-            self.indicators_ready.emit(self.controller.current_indicators)
-
-        except Exception as e:
-            error_msg = f"Data analysis error: {e}\n{traceback.format_exc()}"
-            self.error_signal.emit(error_msg)
-
-    def generate_signals(self):
-        """Generate trading signals"""
-        try:
-            if not self.controller.current_indicators['M1'] or not self.controller.current_indicators['M5']:
-                return
-
-            m1_data = self.controller.current_indicators['M1']
-            m5_data = self.controller.current_indicators['M5']
-
-            # Check if new M1 bar (avoid double signals)
-            if 'rates' in m1_data and len(m1_data['rates']) > 0:
-                current_bar_time = m1_data['rates'][-1]['time']
-                if self.last_m1_time == current_bar_time:
-                    return  # Same bar, skip
-                self.last_m1_time = current_bar_time
-
-            # Strategy logic: Trend filter (M5) + Entry (M1)
-            signal = self.evaluate_strategy(m1_data, m5_data)
-
-            if signal and signal['side']:
-                # Log detailed signal
-                signal_msg = (f"[SIGNAL] side={signal['side']} price={signal['entry_price']:.5f}, "
-                            f"trend_ok={signal['trend_ok']}, pullback_ok={signal['pullback_ok']}, "
-                            f"rsi_ok={signal['rsi_ok']}, spread={signal['spread_points']}, "
-                            f"atr_pts={signal['atr_points']:.1f}, reason={signal['reason']}")
-                self.heartbeat_signal.emit(signal_msg)
-
-                self.signal_ready.emit(signal)
-
-        except Exception as e:
-            error_msg = f"Signal generation error: {e}\n{traceback.format_exc()}"
-            self.error_signal.emit(error_msg)
-
-    def evaluate_strategy(self, m1_data, m5_data):
-        """Evaluate scalping strategy"""
-        try:
+            
             # Get current tick
-            symbol = self.controller.config['symbol']
-
-            if MT5_AVAILABLE:
-                tick = mt5.symbol_info_tick(symbol)
-            else:
-                # Demo tick
-                import random
-                tick = type('MockTick', (), {
-                    'bid': self.demo_price + random.uniform(-0.5, 0.5),
-                    'ask': self.demo_price + random.uniform(0.2, 0.7),
-                    'last': self.demo_price
-                })()
-
+            tick = mt5.symbol_info_tick(symbol)
             if not tick:
                 return None
+
+            # Calculate spread
+            point = getattr(self.controller.symbol_info, 'point', 0.01)
+            spread_points = round((tick.ask - tick.bid) / point)
+
+            return {
+                'bid': tick.bid,
+                'ask': tick.ask,
+                'last': tick.last,
+                'spread_points': spread_points,
+                'time': datetime.now()
+            }
+
+        except Exception as e:
+            self.logger.error(f"Market data error: {e}")
+            return None
+
+    def perform_technical_analysis(self):
+        """Perform comprehensive technical analysis"""
+        try:
+            symbol = self.controller.config['symbol']
+
+            # Get M1 and M5 bars
+            rates_m1 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 200)
+            rates_m5 = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M5, 0, 200)
+
+            if rates_m1 is None or rates_m5 is None or len(rates_m1) < 50:
+                return None
+
+            # M1 Analysis
+            m1_analysis = self.analyze_timeframe(rates_m1, 'M1')
+            
+            # M5 Analysis  
+            m5_analysis = self.analyze_timeframe(rates_m5, 'M5')
+
+            # Update controller indicators
+            self.controller.current_indicators = {
+                'M1': m1_analysis,
+                'M5': m5_analysis
+            }
+
+            return self.controller.current_indicators
+
+        except Exception as e:
+            self.logger.error(f"Technical analysis error: {e}")
+            return None
+
+    def analyze_timeframe(self, rates, timeframe):
+        """Analyze single timeframe with all indicators"""
+        try:
+            close = rates['close']
+            high = rates['high']
+            low = rates['low']
+            volume = rates['tick_volume']
+
+            # Calculate indicators
+            ema_fast = self.indicators.ema(close, self.controller.config['ema_periods']['fast'])
+            ema_medium = self.indicators.ema(close, self.controller.config['ema_periods']['medium'])
+            ema_slow = self.indicators.ema(close, self.controller.config['ema_periods']['slow'])
+            rsi = self.indicators.rsi(close, self.controller.config['rsi_period'])
+            atr = self.indicators.atr(high, low, close, self.controller.config['atr_period'])
+
+            # Get latest values safely
+            return {
+                'ema_fast': ema_fast[-1] if len(ema_fast) > 0 and not np.isnan(ema_fast[-1]) else close[-1],
+                'ema_medium': ema_medium[-1] if len(ema_medium) > 0 and not np.isnan(ema_medium[-1]) else close[-1],
+                'ema_slow': ema_slow[-1] if len(ema_slow) > 0 and not np.isnan(ema_slow[-1]) else close[-1],
+                'rsi': rsi[-1] if len(rsi) > 0 and not np.isnan(rsi[-1]) else 50,
+                'atr': atr[-1] if len(atr) > 0 and not np.isnan(atr[-1]) else 0.01,
+                'close': close[-1],
+                'high': high[-1],
+                'low': low[-1],
+                'volume': volume[-1],
+                'rates': rates,
+                'timeframe': timeframe
+            }
+
+        except Exception as e:
+            self.logger.error(f"Timeframe analysis error: {e}")
+            return {}
+
+    def generate_trading_signal(self, analysis):
+        """Enhanced signal generation with professional scalping strategy"""
+        try:
+            if not analysis or 'M1' not in analysis or 'M5' not in analysis:
+                return {'side': None, 'reason': 'insufficient_data'}
+
+            m1 = analysis['M1']
+            m5 = analysis['M5']
+
+            # Get current market data
+            symbol = self.controller.config['symbol']
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                return {'side': None, 'reason': 'no_tick_data'}
 
             point = getattr(self.controller.symbol_info, 'point', 0.01)
             spread_points = round((tick.ask - tick.bid) / point)
 
-            # Check spread filter
-            max_spread = self.controller.config.get('max_spread_points', 50)
+            # ENHANCED SCALPING STRATEGY
+            signal = self.evaluate_scalping_strategy(m1, m5, tick, spread_points, point)
+            
+            return signal
+
+        except Exception as e:
+            self.logger.error(f"Signal generation error: {e}")
+            return {'side': None, 'reason': f'error: {e}'}
+
+    def evaluate_scalping_strategy(self, m1, m5, tick, spread_points, point):
+        """Professional scalping strategy implementation"""
+        try:
+            # 1. Spread filter (critical for scalping)
+            max_spread = self.controller.config.get('max_spread_points', 30)
             if spread_points > max_spread:
-                return {'side': None, 'reason': 'spread_too_wide'}
+                return {'side': None, 'reason': 'spread_too_wide', 'spread_points': spread_points}
 
-            # Trend filter (M5): BUY jika EMA9>EMA21 & price>EMA50
-            m5_ema_fast = m5_data.get('ema_fast', 0)
-            m5_ema_medium = m5_data.get('ema_medium', 0) 
-            m5_ema_slow = m5_data.get('ema_slow', 0)
-            m5_close = m5_data.get('close', 0)
+            # 2. Session filter
+            if not self.is_trading_session():
+                return {'side': None, 'reason': 'outside_session'}
 
-            trend_bullish = m5_ema_fast > m5_ema_medium and m5_close > m5_ema_slow
-            trend_bearish = m5_ema_fast < m5_ema_medium and m5_close < m5_ema_slow
+            # 3. Trend analysis (M5 timeframe)
+            m5_trend = self.determine_trend(m5)
+            if m5_trend == 'SIDEWAYS':
+                return {'side': None, 'reason': 'sideways_market'}
 
-            if not trend_bullish and not trend_bearish:
-                return {'side': None, 'reason': 'no_trend'}
+            # 4. Entry conditions (M1 timeframe)
+            entry_signal = self.check_entry_conditions(m1, m5_trend, tick)
+            if not entry_signal:
+                return {'side': None, 'reason': 'no_entry_signal'}
 
-            # Entry logic (M1): Pullback continuation
-            m1_close = m1_data.get('close', 0)
-            m1_ema_fast = m1_data.get('ema_fast', 0)
-            m1_ema_medium = m1_data.get('ema_medium', 0)
-            m1_rsi = m1_data.get('rsi', 50)
+            # 5. Risk assessment
+            atr_points = m1.get('atr', 0) / point
+            if atr_points < 50:  # Minimum volatility for scalping
+                return {'side': None, 'reason': 'low_volatility'}
 
-            # Check for pullback and continuation
-            pullback_signal = None
+            # 6. Final signal confirmation
+            side = entry_signal['side']
+            confidence = entry_signal['confidence']
 
-            if trend_bullish:
-                # BUY signal: price pulled back to EMA then continues up
-                if (m1_close > m1_ema_fast and 
-                    abs(m1_close - m1_ema_fast) < m1_data.get('atr', 100) * 0.5):
-                    pullback_signal = 'BUY'
-
-            elif trend_bearish:
-                # SELL signal: price pulled back to EMA then continues down  
-                if (m1_close < m1_ema_fast and
-                    abs(m1_close - m1_ema_fast) < m1_data.get('atr', 100) * 0.5):
-                    pullback_signal = 'SELL'
-
-            if not pullback_signal:
-                return {'side': None, 'reason': 'no_pullback_signal'}
-
-            # RSI confirmation (optional, based on checkbox)
-            rsi_ok = True  # Default true
-            if self.controller.config.get('use_rsi_filter', False):
-                if pullback_signal == 'BUY' and m1_rsi < 50:
-                    rsi_ok = False
-                elif pullback_signal == 'SELL' and m1_rsi > 50:
-                    rsi_ok = False
-
-            # Calculate ATR in points
-            atr_points = m1_data.get('atr', 0) / point
+            # Only high confidence signals
+            if confidence < 0.75:
+                return {'side': None, 'reason': 'low_confidence'}
 
             return {
-                'side': pullback_signal,
-                'entry_price': tick.ask if pullback_signal == 'BUY' else tick.bid,
-                'trend_ok': 1,
-                'pullback_ok': 1,
-                'rsi_ok': 1 if rsi_ok else 0,
-                'spread_points': spread_points,
+                'side': side,
+                'entry_price': tick.ask if side == 'BUY' else tick.bid,
+                'confidence': confidence,
+                'trend': m5_trend,
                 'atr_points': atr_points,
-                'reason': 'strategy_confirmed',
-                'timestamp': datetime.now()
+                'spread_points': spread_points,
+                'reason': 'scalping_signal_confirmed',
+                'timestamp': datetime.now(),
+                'm1_data': m1,
+                'm5_data': m5
             }
 
         except Exception as e:
-            self.logger.error(f"Strategy evaluation error: {e}")
-            return {'side': None, 'reason': f'error: {e}'}
+            return {'side': None, 'reason': f'strategy_error: {e}'}
+
+    def determine_trend(self, data):
+        """Determine market trend from M5 data"""
+        try:
+            ema_fast = data.get('ema_fast', 0)
+            ema_medium = data.get('ema_medium', 0)
+            ema_slow = data.get('ema_slow', 0)
+            close = data.get('close', 0)
+
+            # Strong uptrend
+            if (ema_fast > ema_medium > ema_slow and 
+                close > ema_fast and 
+                (ema_fast - ema_slow) / ema_slow > 0.001):
+                return 'BULLISH'
+
+            # Strong downtrend
+            if (ema_fast < ema_medium < ema_slow and 
+                close < ema_fast and 
+                (ema_slow - ema_fast) / ema_slow > 0.001):
+                return 'BEARISH'
+
+            return 'SIDEWAYS'
+
+        except Exception as e:
+            return 'SIDEWAYS'
+
+    def check_entry_conditions(self, m1, trend, tick):
+        """Check M1 entry conditions based on M5 trend"""
+        try:
+            ema_fast = m1.get('ema_fast', 0)
+            ema_medium = m1.get('ema_medium', 0)
+            close = m1.get('close', 0)
+            rsi = m1.get('rsi', 50)
+
+            if trend == 'BULLISH':
+                # BUY conditions: Pullback to EMA and bounce
+                if (close <= ema_medium and close > ema_fast and 
+                    rsi > 30 and rsi < 70 and
+                    tick.ask > ema_fast):
+                    return {'side': 'BUY', 'confidence': 0.8}
+
+            elif trend == 'BEARISH':
+                # SELL conditions: Pullback to EMA and rejection
+                if (close >= ema_medium and close < ema_fast and 
+                    rsi < 70 and rsi > 30 and
+                    tick.bid < ema_fast):
+                    return {'side': 'SELL', 'confidence': 0.8}
+
+            return None
+
+        except Exception as e:
+            return None
+
+    def is_trading_session(self):
+        """Check if current time is within trading session"""
+        try:
+            now = datetime.now(pytz.timezone('Asia/Jakarta'))
+            current_hour = now.hour
+
+            # London session: 15:00 - 18:00 Jakarta time
+            # New York session: 20:00 - 00:00 Jakarta time
+            return (15 <= current_hour <= 18) or (20 <= current_hour <= 23)
+
+        except Exception as e:
+            return True  # Default to allow trading
 
     def stop(self):
+        """Stop the analysis worker"""
         self.running = False
         self.quit()
         self.wait(5000)
 
 class BotController(QObject):
-    """Fixed MT5 Scalping Bot Controller - PRODUCTION READY"""
+    """Enhanced MT5 Scalping Bot Controller - REAL TRADING ONLY"""
 
     # Signals for GUI updates
-    signal_log = Signal(str, str)  # message, level
-    signal_status = Signal(str)    # status message
-    signal_market_data = Signal(dict)  # market data
-    signal_trade_signal = Signal(dict)  # trade signals
-    signal_position_update = Signal(list)  # positions list
-    signal_account_update = Signal(dict)  # account info
-    signal_indicators_update = Signal(dict)  # indicators update
-    signal_analysis_update = Signal(dict)  # analysis status update
+    signal_log = Signal(str, str)
+    signal_status = Signal(str)
+    signal_market_data = Signal(dict)
+    signal_trade_signal = Signal(dict)
+    signal_position_update = Signal(list)
+    signal_account_update = Signal(dict)
+    signal_indicators_update = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -400,7 +387,13 @@ class BotController(QObject):
         self.shadow_mode = True  # Start in shadow mode for safety
         self.mt5_available = MT5_AVAILABLE
 
-        # Execution statistics
+        # MANDATORY: Verify MT5 module
+        if not MT5_AVAILABLE:
+            self.log_message("❌ CRITICAL: MetaTrader5 module not installed!", "ERROR")
+            self.log_message("❌ Real trading REQUIRES MT5 Python API", "ERROR")
+            self.log_message("❌ Install command: pip install MetaTrader5", "ERROR")
+
+        # Trading statistics
         self.execution_stats = {
             'signals_generated': 0,
             'signals_executed': 0,
@@ -408,29 +401,29 @@ class BotController(QObject):
             'last_execution': 'Never'
         }
 
-        # Configuration
+        # Enhanced configuration
         self.config = {
             'symbol': 'XAUUSD',
             'risk_percent': 0.5,
             'max_daily_loss': 2.0,
-            'max_trades_per_day': 15,
-            'max_spread_points': 50,
-            'min_sl_points': 150,
-            'risk_multiple': 2.0,
+            'max_trades_per_day': 10,
+            'max_spread_points': 30,  # Tighter spread for scalping
+            'min_sl_points': 100,
+            'risk_multiple': 1.5,     # Conservative R:R for scalping
             'ema_periods': {'fast': 9, 'medium': 21, 'slow': 50},
             'rsi_period': 14,
             'atr_period': 14,
-            'tp_sl_mode': 'ATR',  # ATR, Points, Pips, Balance%
-            'atr_multiplier': 2.0,
-            'tp_percent': 1.0,    # TP percentage of balance
-            'sl_percent': 0.5,    # SL percentage of balance
-            'tp_points': 200,     # TP in points
-            'sl_points': 100,     # SL in points
-            'tp_pips': 20,        # TP in pips
-            'sl_pips': 10,        # SL in pips
-            'use_rsi_filter': False,
-            'deviation': 10,      # Price deviation for orders
-            'magic_number': 234567
+            'tp_sl_mode': 'ATR',
+            'atr_multiplier': 1.5,    # Tighter SL for scalping
+            'tp_percent': 1.0,
+            'sl_percent': 0.5,
+            'tp_points': 150,         # Scalping targets
+            'sl_points': 75,
+            'tp_pips': 15,
+            'sl_pips': 7.5,
+            'use_rsi_filter': True,
+            'deviation': 5,           # Tight deviation for scalping
+            'magic_number': 987654321
         }
 
         # Trading state
@@ -447,11 +440,11 @@ class BotController(QObject):
         self.positions = []
         self.symbol_info = None
 
-        # Workers
+        # Workers and timers
         self.analysis_worker = None
         self.data_mutex = QMutex()
 
-        # Timers
+        # Real-time timers
         self.account_timer = QTimer()
         self.account_timer.timeout.connect(self.update_account_info)
 
@@ -460,205 +453,172 @@ class BotController(QObject):
 
         # Initialize logging
         self.setup_logging()
-
-        self.log_message("Bot controller initialized", "INFO")
+        self.log_message("Enhanced controller initialized - REAL TRADING READY", "INFO")
 
     def setup_logging(self):
-        """Setup logging system"""
+        """Setup comprehensive logging"""
         try:
             log_dir = Path("logs")
             log_dir.mkdir(exist_ok=True)
 
-            # Setup CSV logging for trades
+            # CSV trade logging
             self.csv_file = log_dir / f"trades_{datetime.now().strftime('%Y%m%d')}.csv"
-
             if not self.csv_file.exists():
                 with open(self.csv_file, 'w', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(['timestamp', 'side', 'entry', 'sl', 'tp', 'lot', 'result', 'spread_pts', 'atr_pts', 'mode', 'reason'])
+                    writer.writerow([
+                        'timestamp', 'side', 'entry', 'sl', 'tp', 'lot', 
+                        'result', 'spread_pts', 'atr_pts', 'mode', 'reason'
+                    ])
 
         except Exception as e:
             print(f"Logging setup error: {e}")
 
     def log_message(self, message: str, level: str = "INFO"):
-        """Emit log message signal"""
+        """Enhanced log message with threading safety"""
         try:
             timestamp = datetime.now().strftime('%H:%M:%S')
             formatted_message = f"[{timestamp}] {message}"
             self.signal_log.emit(formatted_message, level)
 
-            # Also log to console in demo mode
-            if not MT5_AVAILABLE:
-                print(f"[{level}] {formatted_message}")
+            # Console logging for debugging
+            print(f"[{level}] {formatted_message}")
 
         except Exception as e:
             print(f"Log emit error: {e}")
 
     def connect_mt5(self) -> bool:
-        """Connect to MetaTrader 5 with improved error handling"""
+        """Enhanced MT5 connection with multiple strategies"""
         try:
             if not MT5_AVAILABLE:
-                self.log_message("⚠️ MetaTrader5 module not found!", "WARNING")
-                self.log_message("📦 Install command: pip install MetaTrader5", "INFO")
-                self.log_message("🔄 Switching to DEMO mode for testing...", "INFO")
+                self.log_message("❌ CANNOT CONNECT: MetaTrader5 module not installed", "ERROR")
+                self.log_message("❌ Real trading REQUIRES: pip install MetaTrader5", "ERROR")
+                return False
 
-                # Set demo mode and proceed
-                self.mt5_available = False
-                self.is_connected = True  # Allow demo connection
-                self.account_info = {
-                    'login': 12345678,
-                    'balance': 10000.0,
-                    'equity': 10000.0,
-                    'margin': 0.0,
-                    'profit': 0.0
-                }
+            self.log_message("🚀 CONNECTING TO REAL MT5 PLATFORM...", "INFO")
 
-                # Setup demo analysis worker
-                self.setup_analysis_worker()
-                if self.analysis_worker is not None:
-                    self.analysis_worker.start()
-
-                self.log_message("✅ DEMO MODE CONNECTED - Testing environment ready", "INFO")
-                return True
-
-            # REAL MT5 CONNECTION
-            self.log_message("🚀 CONNECTING TO REAL MT5...", "INFO")
-
-            # 1. Check if MT5 terminal is running
-            self.log_message("🔍 Checking MT5 terminal status...", "INFO")
-
-            # Multiple initialization strategies
-            mt5_initialized = False
+            # Enhanced connection strategies
+            connection_successful = False
             last_error = None
 
-            # Strategy 1: Simple initialize (most common)
+            # Strategy 1: Simple initialization
             try:
-                self.log_message("📡 Attempting simple MT5 connection...", "INFO")
+                self.log_message("📡 Attempting direct MT5 connection...", "INFO")
                 if mt5.initialize():
-                    mt5_initialized = True
-                    self.log_message("✅ MT5 connected successfully!", "INFO")
+                    connection_successful = True
+                    self.log_message("✅ Direct connection successful!", "INFO")
                 else:
                     last_error = mt5.last_error()
-                    self.log_message(f"❌ Simple init failed: {last_error}", "WARNING")
+                    self.log_message(f"❌ Direct connection failed: {last_error}", "WARNING")
             except Exception as e:
-                self.log_message(f"❌ Simple init exception: {e}", "WARNING")
+                self.log_message(f"❌ Direct connection exception: {e}", "WARNING")
 
-            # Strategy 2: Try with explicit paths
-            if not mt5_initialized:
-                self.log_message("🔄 Trying with explicit MT5 paths...", "INFO")
+            # Strategy 2: Path-based initialization
+            if not connection_successful:
+                self.log_message("🔄 Trying MT5 installation paths...", "INFO")
                 mt5_paths = [
-                    "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
-                    "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe",
-                    "C:\\Program Files\\MetaTrader 5\\terminal.exe",
-                    "C:\\Users\\%USERNAME%\\AppData\\Roaming\\MetaQuotes\\Terminal\\*\\terminal64.exe"
+                    r"C:\Program Files\MetaTrader 5\terminal64.exe",
+                    r"C:\Program Files (x86)\MetaTrader 5\terminal64.exe",
                 ]
 
                 for path in mt5_paths:
                     try:
-                        self.log_message(f"🔌 Trying path: {path}", "INFO")
+                        self.log_message(f"🔌 Testing path: {path}", "INFO")
                         if mt5.initialize(path=path):
-                            mt5_initialized = True
-                            self.log_message(f"✅ MT5 connected via: {path}", "INFO")
+                            connection_successful = True
+                            self.log_message(f"✅ Connected via: {path}", "INFO")
                             break
-                        else:
-                            self.log_message(f"❌ Path failed: {path}", "WARNING")
                     except Exception as e:
-                        self.log_message(f"❌ Path error {path}: {e}", "WARNING")
                         continue
 
-            # Strategy 3: Check MT5 terminal process
-            if not mt5_initialized:
-                self.log_message("🔄 Final connection attempt...", "INFO")
+            # Strategy 3: Force reset and retry
+            if not connection_successful:
+                self.log_message("🔄 Force reset and final attempt...", "INFO")
                 try:
-                    # Force close any existing connections
                     mt5.shutdown()
                     import time
-                    time.sleep(1)
-
+                    time.sleep(2)
+                    
                     if mt5.initialize():
-                        mt5_initialized = True
-                        self.log_message("✅ MT5 connected after reset!", "INFO")
-                    else:
-                        last_error = mt5.last_error()
-                        self.log_message(f"❌ Final attempt failed: {last_error}", "ERROR")
+                        connection_successful = True
+                        self.log_message("✅ Reset connection successful!", "INFO")
                 except Exception as e:
-                    self.log_message(f"❌ Final attempt exception: {e}", "ERROR")
+                    self.log_message(f"❌ Reset connection failed: {e}", "ERROR")
 
-            if not mt5_initialized:
-                self.log_message("🚨 MT5 CONNECTION FAILED!", "ERROR")
-                self.log_message("📋 TROUBLESHOOTING STEPS:", "ERROR")
+            if not connection_successful:
+                self.log_message("🚨 ALL CONNECTION ATTEMPTS FAILED!", "ERROR")
+                self.log_message("📋 TROUBLESHOOTING REQUIRED:", "ERROR")
                 self.log_message("1. ✅ Ensure MT5 terminal is RUNNING", "ERROR")
-                self.log_message("2. ✅ LOGIN to your MT5 account", "ERROR") 
-                self.log_message("3. ✅ Enable 'Allow automated trading' in MT5 settings", "ERROR")
-                self.log_message("4. ✅ Go to Tools → Options → Expert Advisors", "ERROR")
-                self.log_message("5. ✅ Check 'Allow automated trading'", "ERROR")
-                self.log_message("6. ✅ Check 'Allow imports of external experts'", "ERROR")
-                self.log_message("7. ✅ Restart MT5 terminal and try again", "ERROR")
+                self.log_message("2. ✅ LOGIN to your trading account", "ERROR")
+                self.log_message("3. ✅ Enable 'Allow automated trading'", "ERROR")
+                self.log_message("4. ✅ Check Tools → Options → Expert Advisors", "ERROR")
+                self.log_message("5. ✅ 'Allow automated trading' must be checked", "ERROR")
+                self.log_message("6. ✅ 'Allow imports of external experts' must be checked", "ERROR")
                 return False
 
-            # 2. Get account info
+            # Verify account login
             account_info = mt5.account_info()
             if account_info is None:
-                self.log_message("Failed to get account info - Check MT5 login", "ERROR")
-                self.log_message("Make sure you are logged into MT5 terminal", "ERROR")
+                self.log_message("❌ MT5 connected but NO ACCOUNT LOGIN!", "ERROR")
+                self.log_message("❌ Please login to your trading account in MT5", "ERROR")
                 return False
 
+            # Store account info
             self.account_info = account_info._asdict()
-            self.log_message(f"Connected to account: {self.account_info['login']}", "INFO")
-            self.log_message(f"Account balance: ${self.account_info['balance']:.2f}", "INFO")
-
-            # 3. Select and validate symbol
+            self.log_message(f"✅ Account connected: {self.account_info['login']}", "INFO")
+            self.log_message(f"✅ Live balance: ${self.account_info['balance']:.2f}", "INFO")
+            
+            # Validate symbol
             symbol = self.config['symbol']
             if not mt5.symbol_select(symbol, True):
-                self.log_message(f"Failed to select symbol {symbol}", "ERROR")
+                self.log_message(f"❌ Failed to select symbol: {symbol}", "ERROR")
                 return False
 
-            # 4. Get symbol info
+            # Get symbol info
             self.symbol_info = mt5.symbol_info(symbol)
             if self.symbol_info is None:
-                self.log_message(f"Failed to get symbol info for {symbol}", "ERROR")
+                self.log_message(f"❌ Failed to get symbol info: {symbol}", "ERROR")
                 return False
 
-            # 5. Validate symbol trading
+            # Verify trading permissions
             if self.symbol_info.trade_mode != mt5.SYMBOL_TRADE_MODE_FULL:
-                self.log_message(f"Symbol {symbol} not available for trading", "ERROR")
+                self.log_message(f"❌ Symbol {symbol} not available for trading", "ERROR")
                 return False
 
-            # 6. Log symbol specifications
-            self.log_symbol_info()
+            # Log symbol specifications
+            self.log_symbol_specs()
 
+            # Connection successful
             self.is_connected = True
-            self.log_message("MT5 connection successful", "INFO")
+            self.log_message("🎉 MT5 CONNECTION SUCCESSFUL!", "INFO")
 
-            # Start real-time data feed and analysis worker
-            self.setup_analysis_worker()
-            if self.analysis_worker is not None:
-                self.analysis_worker.start()
-            self.log_message("✅ ANALYSIS WORKER STARTED - LIVE SIGNAL GENERATION", "INFO")
+            # Start analysis worker
+            self.start_analysis_worker()
 
-            # Start timers for real-time monitoring
-            self.account_timer.start(1000)  # Update every 1 second for faster response
-            self.position_timer.start(500)   # Update every 0.5 seconds for position monitoring
+            # Start monitoring timers
+            self.account_timer.start(1000)   # 1 second
+            self.position_timer.start(500)   # 0.5 seconds
 
+            self.log_message("✅ REAL-TIME MONITORING ACTIVE", "INFO")
             return True
 
         except Exception as e:
-            error_msg = f"MT5 connection error: {e}\n{traceback.format_exc()}"
+            error_msg = f"MT5 connection critical error: {e}\n{traceback.format_exc()}"
             self.log_message(error_msg, "ERROR")
             return False
 
-    def setup_analysis_worker(self):
-        """Setup analysis worker thread"""
+    def start_analysis_worker(self):
+        """Start enhanced analysis worker"""
         try:
-            # Stop existing worker if running
+            # Stop existing worker
             if self.analysis_worker and self.analysis_worker.isRunning():
                 self.analysis_worker.stop()
                 self.analysis_worker.wait()
 
-            # Create new analysis worker
+            # Create new worker
             self.analysis_worker = AnalysisWorker(self)
 
-            # Connect signals PROPERLY
+            # Connect signals
             self.analysis_worker.heartbeat_signal.connect(
                 lambda msg: self.log_message(msg, "INFO"))
             self.analysis_worker.signal_ready.connect(self.handle_trading_signal)
@@ -667,162 +627,166 @@ class BotController(QObject):
             self.analysis_worker.error_signal.connect(
                 lambda msg: self.log_message(msg, "ERROR"))
 
-            self.log_message("Analysis worker setup completed", "INFO")
+            # Start worker
+            self.analysis_worker.start()
+            self.log_message("✅ ENHANCED ANALYSIS WORKER STARTED", "INFO")
 
         except Exception as e:
-            self.log_message(f"Analysis worker setup error: {e}", "ERROR")
+            self.log_message(f"Analysis worker error: {e}", "ERROR")
 
     def handle_tick_data(self, tick_data):
-        """Handle tick data dari analysis worker"""
+        """Handle real-time tick data"""
         self.current_market_data = tick_data
         self.signal_market_data.emit(tick_data)
 
     def handle_indicators_update(self, indicators):
-        """Handle indicators update"""
+        """Handle technical indicators update"""
         self.current_indicators = indicators
         self.signal_indicators_update.emit(indicators)
 
     def handle_trading_signal(self, signal):
-        """Handle trading signal with AUTO-EXECUTION"""
+        """Handle trading signal with enhanced execution"""
         try:
             if not signal or not signal.get('side'):
                 return
 
             self.execution_stats['signals_generated'] += 1
-
-            signal_type = signal.get('side', 'NONE')  
+            signal_side = signal.get('side')
             entry_price = signal.get('entry_price', 0)
+            confidence = signal.get('confidence', 0)
 
-            self.log_message(f"💰 [SIGNAL] {signal_type} at {entry_price:.5f}", "INFO")
+            self.log_message(f"🎯 [SIGNAL] {signal_side} @ {entry_price:.5f} confidence={confidence:.2f}", "INFO")
             self.current_signal = signal
             self.signal_trade_signal.emit(signal)
 
-            # Check risk limits
-            if not self.check_risk_limits():
-                self.log_message("[BLOCK] Signal blocked by risk management", "WARNING")
+            # Risk management checks
+            if not self.check_enhanced_risk_limits():
+                self.log_message("🛡️ [BLOCKED] Signal blocked by risk management", "WARNING")
                 return
 
-            # AUTO-EXECUTION for non-shadow mode
+            # Auto-execution for live mode
             if not self.shadow_mode and self.is_running:
-                success = self.execute_signal(signal)
+                success = self.execute_enhanced_signal(signal)
                 if success:
                     self.execution_stats['signals_executed'] += 1
                     self.execution_stats['last_execution'] = datetime.now().strftime('%H:%M:%S')
-                    self.log_message(f"✅ [EXECUTED] {signal_type} order placed successfully", "INFO")
+                    self.log_message(f"✅ [EXECUTED] {signal_side} order placed successfully", "INFO")
                 else:
-                    self.log_message(f"❌ [FAILED] {signal_type} execution failed", "ERROR")
+                    self.log_message(f"❌ [FAILED] {signal_side} execution failed", "ERROR")
 
                 # Update execution rate
                 if self.execution_stats['signals_generated'] > 0:
-                    rate = (self.execution_stats['signals_executed'] / self.execution_stats['signals_generated']) * 100
+                    rate = (self.execution_stats['signals_executed'] / 
+                           self.execution_stats['signals_generated']) * 100
                     self.execution_stats['execution_rate'] = rate
+
             else:
-                self.log_message(f"🔒 [SHADOW] {signal_type} simulated - Live mode disabled", "INFO")
+                self.log_message(f"🔒 [SHADOW] {signal_side} simulated - Live mode disabled", "INFO")
 
         except Exception as e:
             error_msg = f"Signal handling error: {e}\n{traceback.format_exc()}"
             self.log_message(error_msg, "ERROR")
 
-    def execute_signal(self, signal):
-        """Execute REAL trading signal with actual MT5 orders"""
+    def execute_enhanced_signal(self, signal):
+        """Execute real trading signal with enhanced order management"""
         try:
-            if not MT5_AVAILABLE or not self.is_connected:
-                self.log_message("❌ CANNOT EXECUTE - MT5 NOT CONNECTED", "ERROR")
+            if not self.is_connected or not MT5_AVAILABLE:
+                self.log_message("❌ EXECUTION FAILED: MT5 not connected", "ERROR")
                 return False
 
             symbol = self.config['symbol']
             side = signal.get('side')
 
-            # Calculate lot size based on risk
-            lot_size = self.calculate_lot_size(signal)
-
-            # Get current tick for execution
-            tick = mt5.symbol_info_tick(symbol)
-            if not tick:
-                self.log_message("❌ Cannot get tick data for execution", "ERROR")
+            # Enhanced lot size calculation
+            lot_size = self.calculate_enhanced_lot_size(signal)
+            if lot_size <= 0:
+                self.log_message("❌ EXECUTION FAILED: Invalid lot size", "ERROR")
                 return False
 
-            # Calculate TP and SL
-            tp_price, sl_price = self.calculate_tp_sl(signal, tick)
+            # Get fresh tick data
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                self.log_message("❌ EXECUTION FAILED: No tick data", "ERROR")
+                return False
 
-            # Prepare order request
+            # Calculate enhanced TP/SL
+            tp_price, sl_price = self.calculate_enhanced_tp_sl(signal, tick)
+
+            # Prepare order with enhanced parameters
             if side == "BUY":
                 order_type = mt5.ORDER_TYPE_BUY
                 price = tick.ask
-                sl = sl_price
-                tp = tp_price
             else:
                 order_type = mt5.ORDER_TYPE_SELL
                 price = tick.bid
-                sl = sl_price
-                tp = tp_price
 
-            # Create order request
+            # Enhanced order request
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,
                 "volume": lot_size,
                 "type": order_type,
                 "price": price,
-                "sl": sl,
-                "tp": tp,
-                "deviation": self.config.get('deviation', 10),
-                "magic": self.config.get('magic_number', 234567),
-                "comment": f"REAL_{side}_Signal",
+                "sl": sl_price,
+                "tp": tp_price,
+                "deviation": self.config.get('deviation', 5),
+                "magic": self.config.get('magic_number', 987654321),
+                "comment": f"SCALP_{side}_{signal.get('confidence', 0):.2f}",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
 
-            # Execute REAL order
+            # Execute with fallback filling
             result = mt5.order_send(request)
-
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                # Try with FOK filling
+                # Try FOK filling
                 request["type_filling"] = mt5.ORDER_FILLING_FOK
                 result = mt5.order_send(request)
 
+            # Verify execution
             if result.retcode == mt5.TRADE_RETCODE_DONE:
-                self.log_message(f"✅ REAL ORDER EXECUTED: {side} {lot_size} lots @ {price:.5f}", "INFO")
-                self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
-                self.log_message(f"✅ SL: {sl:.5f}, TP: {tp:.5f}", "INFO")
+                self.log_message(f"✅ REAL ORDER EXECUTED: {side} {lot_size} @ {price:.5f}", "INFO")
+                self.log_message(f"✅ Ticket: {result.order} | SL: {sl_price:.5f} | TP: {tp_price:.5f}", "INFO")
+                
                 self.daily_trades += 1
-
-                # Log to CSV
-                self.log_trade_to_csv(signal, result, lot_size, sl, tp)
+                self.log_trade_to_csv(signal, result, lot_size, sl_price, tp_price)
                 return True
             else:
-                error_msg = f"❌ REAL ORDER FAILED: {result.retcode} - {result.comment}"
-                self.log_message(error_msg, "ERROR")
+                self.log_message(f"❌ ORDER FAILED: {result.retcode} - {result.comment}", "ERROR")
                 return False
 
         except Exception as e:
-            error_msg = f"Real execution error: {e}"
+            error_msg = f"Enhanced execution error: {e}"
             self.log_message(error_msg, "ERROR")
             return False
 
-    def calculate_lot_size(self, signal):
-        """Calculate lot size based on account risk percentage"""
+    def calculate_enhanced_lot_size(self, signal):
+        """Calculate lot size with enhanced risk management"""
         try:
             if not self.account_info:
-                return 0.01  # Minimum lot
+                return 0.01
 
             balance = self.account_info.get('balance', 10000)
             risk_percent = self.config.get('risk_percent', 0.5) / 100
             risk_amount = balance * risk_percent
 
-            # Get symbol info for calculations
+            # Symbol constraints
             if not self.symbol_info:
                 return 0.01
 
-            # Calculate based on SL distance
+            # Enhanced SL calculation based on signal
             point = self.symbol_info.point
+            atr_points = signal.get('atr_points', 100)
+            
+            # Adaptive SL based on volatility
+            if atr_points > 200:
+                sl_points = atr_points * 0.8  # Wider SL for high volatility
+            else:
+                sl_points = max(atr_points * 1.2, 75)  # Tighter SL for low volatility
+
             tick_value = getattr(self.symbol_info, 'trade_tick_value', 1.0)
-
-            # Estimate SL distance (will be refined in calculate_tp_sl)
-            atr = signal.get('atr_points', 100)
-            sl_points = max(self.config.get('min_sl_points', 100), atr)
-
             sl_amount = sl_points * point * tick_value
+
             if sl_amount <= 0:
                 return 0.01
 
@@ -833,22 +797,21 @@ class BotController(QObject):
             max_lot = getattr(self.symbol_info, 'volume_max', 100.0)
             step = getattr(self.symbol_info, 'volume_step', 0.01)
 
-            # Round to step
             lot_size = round(lot_size / step) * step
             lot_size = max(min_lot, min(lot_size, max_lot))
 
-            self.log_message(f"💰 Calculated lot size: {lot_size} (Risk: ${risk_amount:.2f})", "INFO")
+            self.log_message(f"💰 Enhanced lot: {lot_size} (Risk: ${risk_amount:.2f})", "INFO")
             return lot_size
 
         except Exception as e:
             self.log_message(f"Lot calculation error: {e}", "ERROR")
             return 0.01
 
-    def calculate_tp_sl(self, signal, tick):
-        """Calculate TP and SL prices based on selected mode"""
+    def calculate_enhanced_tp_sl(self, signal, tick):
+        """Calculate TP/SL with enhanced scalping logic"""
         try:
-            mode = self.config.get('tp_sl_mode', 'ATR')
             side = signal.get('side')
+            mode = self.config.get('tp_sl_mode', 'ATR')
 
             if side == "BUY":
                 entry_price = tick.ask
@@ -858,33 +821,40 @@ class BotController(QObject):
                 multiplier = -1
 
             point = self.symbol_info.point
+            atr_points = signal.get('atr_points', 100)
 
             if mode == "ATR":
-                atr_points = signal.get('atr_points', 100)
-                atr_multiplier = self.config.get('atr_multiplier', 2.0)
-                risk_multiple = self.config.get('risk_multiple', 2.0)
+                # Enhanced ATR-based calculation
+                confidence = signal.get('confidence', 0.5)
+                
+                # Adaptive multipliers based on confidence
+                if confidence > 0.8:
+                    sl_multiplier = 1.0   # Tighter SL for high confidence
+                    tp_multiplier = 2.0   # Higher TP for high confidence
+                else:
+                    sl_multiplier = 1.5   # Wider SL for lower confidence
+                    tp_multiplier = 1.5   # Conservative TP
 
-                sl_distance = max(atr_points * atr_multiplier, self.config.get('min_sl_points', 100))
-                tp_distance = sl_distance * risk_multiple
+                sl_distance = max(atr_points * sl_multiplier, 50)
+                tp_distance = sl_distance * tp_multiplier
 
             elif mode == "Points":
-                sl_distance = self.config.get('sl_points', 100)
-                tp_distance = self.config.get('tp_points', 200)
+                sl_distance = self.config.get('sl_points', 75)
+                tp_distance = self.config.get('tp_points', 150)
 
             elif mode == "Pips":
                 digits = getattr(self.symbol_info, 'digits', 5)
                 pip_size = 10 if digits in [3, 5] else 1
-
-                sl_distance = self.config.get('sl_pips', 10) * pip_size
-                tp_distance = self.config.get('tp_pips', 20) * pip_size
+                sl_distance = self.config.get('sl_pips', 7.5) * pip_size
+                tp_distance = self.config.get('tp_pips', 15) * pip_size
 
             elif mode == "Balance%":
                 balance = self.account_info.get('balance', 10000)
                 tick_value = getattr(self.symbol_info, 'trade_tick_value', 1.0)
-
+                
                 sl_amount = balance * (self.config.get('sl_percent', 0.5) / 100)
                 tp_amount = balance * (self.config.get('tp_percent', 1.0) / 100)
-
+                
                 sl_distance = sl_amount / (point * tick_value)
                 tp_distance = tp_amount / (point * tick_value)
 
@@ -892,19 +862,49 @@ class BotController(QObject):
             sl_price = entry_price - (multiplier * sl_distance * point)
             tp_price = entry_price + (multiplier * tp_distance * point)
 
-            self.log_message(f"🎯 TP/SL calculated: SL={sl_price:.5f}, TP={tp_price:.5f}", "INFO")
+            self.log_message(f"🎯 Enhanced TP/SL: SL={sl_price:.5f} TP={tp_price:.5f}", "INFO")
             return tp_price, sl_price
 
         except Exception as e:
             self.log_message(f"TP/SL calculation error: {e}", "ERROR")
-            # Fallback values
-            return entry_price + (multiplier * 200 * point), entry_price - (multiplier * 100 * point)
+            # Fallback
+            fallback_distance = 100 * point
+            return (entry_price + (multiplier * fallback_distance * 2), 
+                   entry_price - (multiplier * fallback_distance))
+
+    def check_enhanced_risk_limits(self):
+        """Enhanced risk management checks"""
+        try:
+            # Daily trade limit
+            if self.daily_trades >= self.config['max_trades_per_day']:
+                self.log_message(f"🛡️ Daily trade limit reached: {self.daily_trades}", "WARNING")
+                return False
+
+            # Consecutive losses limit
+            if self.consecutive_losses >= 3:
+                self.log_message(f"🛡️ Consecutive losses limit: {self.consecutive_losses}", "WARNING")
+                return False
+
+            # Account equity check
+            if self.account_info:
+                balance = self.account_info.get('balance', 0)
+                equity = self.account_info.get('equity', 0)
+                
+                if balance > 0:
+                    drawdown = ((balance - equity) / balance) * 100
+                    if drawdown > 3.0:  # 3% max drawdown
+                        self.log_message(f"🛡️ Drawdown limit exceeded: {drawdown:.1f}%", "WARNING")
+                        return False
+
+            return True
+
+        except Exception as e:
+            self.log_message(f"Risk check error: {e}", "ERROR")
+            return True
 
     def log_trade_to_csv(self, signal, result, lot_size, sl, tp):
-        """Log executed trade to CSV for analysis"""
+        """Enhanced trade logging"""
         try:
-            import csv
-
             trade_data = [
                 datetime.now().isoformat(),
                 signal.get('side'),
@@ -915,8 +915,8 @@ class BotController(QObject):
                 'EXECUTED',
                 signal.get('spread_points', 0),
                 signal.get('atr_points', 0),
-                'REAL',
-                result.comment
+                'REAL_ENHANCED',
+                f"conf={signal.get('confidence', 0):.2f}"
             ]
 
             with open(self.csv_file, 'a', newline='') as f:
@@ -926,109 +926,57 @@ class BotController(QObject):
         except Exception as e:
             self.log_message(f"CSV logging error: {e}", "ERROR")
 
-    def execute_manual_trade(self, side, lot_size):
-        """Execute REAL manual trade order via MT5"""
+    def log_symbol_specs(self):
+        """Log detailed symbol specifications"""
         try:
-            if not self.is_connected or not MT5_AVAILABLE:
-                return {'success': False, 'error': 'MT5 not connected - Real trading required'}
+            if not self.symbol_info:
+                return
 
-            symbol = self.config['symbol']
-
-            # Get current tick
-            tick = mt5.symbol_info_tick(symbol)
-            if not tick:
-                return {'success': False, 'error': 'Cannot get current price'}
-
-            # Determine order type and price
-            if side == "BUY":
-                order_type = mt5.ORDER_TYPE_BUY
-                price = tick.ask
-            else:
-                order_type = mt5.ORDER_TYPE_SELL
-                price = tick.bid
-
-            # Manual trades without automatic SL/TP
-            request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "volume": lot_size,
-                "type": order_type,
-                "price": price,
-                "deviation": self.config.get('deviation', 10),
-                "magic": self.config.get('magic_number', 234567),
-                "comment": f"MANUAL_{side}",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-            }
-
-            # Execute REAL manual order
-            result = mt5.order_send(request)
-
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                # Try FOK
-                request["type_filling"] = mt5.ORDER_FILLING_FOK
-                result = mt5.order_send(request)
-
-            if result.retcode == mt5.TRADE_RETCODE_DONE:
-                self.log_message(f"✅ MANUAL {side} EXECUTED: {lot_size} lots @ {price:.5f}", "INFO")
-                self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
-                self.daily_trades += 1
-                return {
-                    'success': True, 
-                    'ticket': result.order, 
-                    'price': result.price,
-                    'deal': result.deal
-                }
-            else:
-                return {
-                    'success': False, 
-                    'error': f"Order failed: {result.retcode} - {result.comment}"
-                }
+            self.log_message(f"📊 Symbol: {self.symbol_info.name}", "INFO")
+            self.log_message(f"📊 Point: {self.symbol_info.point}", "INFO")
+            self.log_message(f"📊 Digits: {self.symbol_info.digits}", "INFO")
+            self.log_message(f"📊 Min/Max Volume: {self.symbol_info.volume_min}/{self.symbol_info.volume_max}", "INFO")
+            self.log_message(f"📊 Volume Step: {self.symbol_info.volume_step}", "INFO")
+            self.log_message(f"📊 Trade Mode: {self.symbol_info.trade_mode}", "INFO")
 
         except Exception as e:
-            error_msg = f"Manual trade error: {e}"
-            self.log_message(error_msg, "ERROR")
-            return {'success': False, 'error': error_msg}
+            self.log_message(f"Symbol specs error: {e}", "ERROR")
 
-
+    # Additional methods for bot control...
     def start_bot(self) -> bool:
-        """Start bot"""
+        """Start enhanced bot"""
         try:
             if not self.is_connected:
-                self.log_message("Not connected to MT5", "ERROR")
+                self.log_message("❌ Cannot start: Not connected to MT5", "ERROR")
                 return False
 
-            # Start analysis worker if not already running
             if not self.analysis_worker or not self.analysis_worker.isRunning():
-                self.setup_analysis_worker()
-                if self.analysis_worker is not None:
-                    self.analysis_worker.start()
-                self.log_message("Analysis worker started", "INFO")
+                self.start_analysis_worker()
 
             self.is_running = True
-            self.log_message("[START] Bot started - Analysis running", "INFO")
+            self.log_message("🚀 [ENHANCED BOT STARTED] Real trading active", "INFO")
             return True
 
         except Exception as e:
-            error_msg = f"Start bot error: {e}\n{traceback.format_exc()}"
+            error_msg = f"Bot start error: {e}"
             self.log_message(error_msg, "ERROR")
             return False
 
     def stop_bot(self):
-        """Stop bot"""
+        """Stop enhanced bot"""
         try:
             self.is_running = False
-
+            
             if self.analysis_worker and self.analysis_worker.isRunning():
                 self.analysis_worker.stop()
 
-            self.log_message("Bot stopped", "INFO")
+            self.log_message("🛑 [BOT STOPPED] Analysis and trading halted", "INFO")
 
         except Exception as e:
-            self.log_message(f"Stop bot error: {e}", "ERROR")
+            self.log_message(f"Bot stop error: {e}", "ERROR")
 
     def disconnect_mt5(self):
-        """Disconnect from MT5"""
+        """Enhanced MT5 disconnect"""
         try:
             self.stop_bot()
 
@@ -1037,61 +985,48 @@ class BotController(QObject):
             if self.position_timer.isActive():
                 self.position_timer.stop()
 
+            if MT5_AVAILABLE:
+                mt5.shutdown()
+
             self.is_connected = False
-            self.log_message("Disconnected from MT5", "INFO")
+            self.log_message("🔌 Disconnected from MT5", "INFO")
 
         except Exception as e:
             self.log_message(f"Disconnect error: {e}", "ERROR")
 
     def update_account_info(self):
-        """Update REAL account information from MT5"""
+        """Enhanced account monitoring"""
         try:
             if not self.is_connected or not MT5_AVAILABLE:
                 return
 
-            # Get REAL account info from MT5
             account_info = mt5.account_info()
             if account_info is None:
-                self.log_message("❌ Failed to get account info from MT5", "ERROR")
+                self.log_message("⚠️ Account info unavailable", "WARNING")
                 return
 
-            # Convert to dict and update
             self.account_info = account_info._asdict()
-
-            # Emit real account data to GUI
             self.signal_account_update.emit(self.account_info)
 
-            # Check for critical account alerts
+            # Enhanced monitoring alerts
             margin_level = self.account_info.get('margin_level', 1000)
-            if margin_level < 200:
-                self.log_message(f"⚠️ LOW MARGIN LEVEL: {margin_level:.1f}%", "WARNING")
-
-            balance = self.account_info.get('balance', 0)
-            equity = self.account_info.get('equity', 0)
-            drawdown = ((balance - equity) / balance * 100) if balance > 0 else 0
-
-            if drawdown > self.config.get('max_drawdown_percent', 3.0):
-                self.log_message(f"🚨 HIGH DRAWDOWN: {drawdown:.1f}% - Consider stopping!", "WARNING")
+            if margin_level < 150:
+                self.log_message(f"🚨 LOW MARGIN: {margin_level:.1f}%", "WARNING")
 
         except Exception as e:
             self.log_message(f"Account update error: {e}", "ERROR")
 
     def update_positions(self):
-        """Update REAL positions from MT5"""
+        """Enhanced position monitoring"""
         try:
             if not self.is_connected or not MT5_AVAILABLE:
                 return
 
-            # Get REAL positions from MT5
             positions = mt5.positions_get(symbol=self.config['symbol'])
-
             if positions is None:
                 positions = []
 
-            # Convert to list of dicts for GUI
             self.positions = []
-            total_profit = 0.0
-
             for pos in positions:
                 pos_dict = {
                     'ticket': pos.ticket,
@@ -1108,42 +1043,23 @@ class BotController(QObject):
                     'time': pos.time
                 }
                 self.positions.append(pos_dict)
-                total_profit += pos.profit
 
-            # Emit real position data
             self.signal_position_update.emit(self.positions)
-
-            # Log position summary
-            if len(self.positions) > 0:
-                self.log_message(f"📊 {len(self.positions)} positions, Total P&L: ${total_profit:.2f}", "INFO")
 
         except Exception as e:
             self.log_message(f"Position update error: {e}", "ERROR")
 
-    def check_risk_limits(self):
-        """Check risk limits"""
-        try:
-            # Daily trades limit
-            if self.daily_trades >= self.config['max_trades_per_day']:
-                return False
-
-            return True
-
-        except Exception as e:
-            self.log_message(f"Risk check error: {e}", "ERROR")
-            return True
-
     def close_all_positions(self):
-        """Close all REAL positions via MT5 (Emergency Stop)"""
+        """Enhanced emergency position closure"""
         try:
             if not MT5_AVAILABLE or not self.is_connected:
-                self.log_message("❌ Cannot close positions - MT5 not connected", "ERROR")
+                self.log_message("❌ Cannot close: MT5 not connected", "ERROR")
                 return
 
             symbol = self.config['symbol']
             positions = mt5.positions_get(symbol=symbol)
 
-            if positions is None or len(positions) == 0:
+            if not positions:
                 self.log_message("✅ No positions to close", "INFO")
                 self.stop_bot()
                 return
@@ -1152,62 +1068,165 @@ class BotController(QObject):
             total_profit = 0.0
 
             for position in positions:
-                # Determine close order type
-                if position.type == mt5.POSITION_TYPE_BUY:
-                    order_type = mt5.ORDER_TYPE_SELL
-                    price = mt5.symbol_info_tick(symbol).bid
-                else:
-                    order_type = mt5.ORDER_TYPE_BUY
-                    price = mt5.symbol_info_tick(symbol).ask
+                try:
+                    # Determine close parameters
+                    if position.type == mt5.POSITION_TYPE_BUY:
+                        order_type = mt5.ORDER_TYPE_SELL
+                        price = mt5.symbol_info_tick(symbol).bid
+                    else:
+                        order_type = mt5.ORDER_TYPE_BUY
+                        price = mt5.symbol_info_tick(symbol).ask
 
-                # Create close request
-                close_request = {
-                    "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": symbol,
-                    "volume": position.volume,
-                    "type": order_type,
-                    "position": position.ticket,
-                    "price": price,
-                    "deviation": 20,
-                    "magic": self.config.get('magic_number', 234567),
-                    "comment": "EMERGENCY_CLOSE",
-                    "type_time": mt5.ORDER_TIME_GTC,
-                    "type_filling": mt5.ORDER_FILLING_IOC,
-                }
+                    # Close order
+                    close_request = {
+                        "action": mt5.TRADE_ACTION_DEAL,
+                        "symbol": symbol,
+                        "volume": position.volume,
+                        "type": order_type,
+                        "position": position.ticket,
+                        "price": price,
+                        "deviation": 20,
+                        "magic": self.config.get('magic_number', 987654321),
+                        "comment": "EMERGENCY_CLOSE",
+                        "type_time": mt5.ORDER_TIME_GTC,
+                        "type_filling": mt5.ORDER_FILLING_IOC,
+                    }
 
-                # Execute close order
-                result = mt5.order_send(close_request)
+                    result = mt5.order_send(close_request)
+                    if result.retcode == mt5.TRADE_RETCODE_DONE:
+                        closed_count += 1
+                        total_profit += position.profit
+                        self.log_message(f"✅ CLOSED: {position.ticket} P&L: ${position.profit:.2f}", "INFO")
+                    else:
+                        self.log_message(f"❌ FAILED: {position.ticket} - {result.comment}", "ERROR")
 
-                if result.retcode == mt5.TRADE_RETCODE_DONE:
-                    closed_count += 1
-                    total_profit += position.profit
-                    self.log_message(f"✅ CLOSED: Ticket {position.ticket}, P&L: ${position.profit:.2f}", "INFO")
-                else:
-                    self.log_message(f"❌ FAILED to close {position.ticket}: {result.comment}", "ERROR")
+                except Exception as e:
+                    self.log_message(f"Close error for {position.ticket}: {e}", "ERROR")
 
-            self.log_message(f"🚨 EMERGENCY STOP: {closed_count} positions closed, Total P&L: ${total_profit:.2f}", "WARNING")
+            self.log_message(f"🚨 EMERGENCY COMPLETE: {closed_count} closed, P&L: ${total_profit:.2f}", "WARNING")
             self.stop_bot()
 
         except Exception as e:
-            error_msg = f"Emergency close error: {e}"
-            self.log_message(error_msg, "ERROR")
+            self.log_message(f"Emergency close error: {e}", "ERROR")
+
+    # Utility methods
+    def get_execution_stats(self):
+        """Get execution statistics"""
+        return self.execution_stats.copy()
+
+    def set_config(self, key, value):
+        """Set configuration value"""
+        self.config[key] = value
+
+    def get_config(self, key):
+        """Get configuration value"""
+        return self.config.get(key)
+
+    def export_logs(self, filename):
+        """Export trading logs"""
+        try:
+            import shutil
+            shutil.copy(self.csv_file, filename)
+            self.log_message(f"📁 Logs exported to: {filename}", "INFO")
+            return True
+        except Exception as e:
+            self.log_message(f"Export error: {e}", "ERROR")
+            return False
+
+    def diagnostic_check(self):
+        """Run comprehensive diagnostics"""
+        try:
+            self.log_message("=== ENHANCED DIAGNOSTIC CHECK ===", "INFO")
+
+            # MT5 module check
+            self.log_message(f"MT5 Module: {'✅ Available' if MT5_AVAILABLE else '❌ Missing'}", "INFO")
+
+            # Connection check
+            self.log_message(f"Connection: {'✅ Connected' if self.is_connected else '❌ Disconnected'}", "INFO")
+
+            # Account check
+            if self.account_info:
+                balance = self.account_info.get('balance', 0)
+                self.log_message(f"Account: ✅ Balance ${balance:.2f}", "INFO")
+            else:
+                self.log_message("Account: ❌ No info", "ERROR")
+
+            # Symbol check
+            if self.symbol_info:
+                self.log_message(f"Symbol: ✅ {self.symbol_info.name}", "INFO")
+            else:
+                self.log_message("Symbol: ❌ Not loaded", "ERROR")
+
+            # Worker check
+            if self.analysis_worker and self.analysis_worker.isRunning():
+                self.log_message("Analysis: ✅ Running", "INFO")
+            else:
+                self.log_message("Analysis: ❌ Stopped", "WARNING")
+
+            self.log_message("=== DIAGNOSTIC COMPLETE ===", "INFO")
+
+        except Exception as e:
+            self.log_message(f"Diagnostic error: {e}", "ERROR")
+
+    def execute_manual_trade(self, side, lot_size):
+        """Execute manual trade"""
+        try:
+            if not self.is_connected or not MT5_AVAILABLE:
+                return {'success': False, 'error': 'MT5 not connected'}
+
+            symbol = self.config['symbol']
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                return {'success': False, 'error': 'No tick data'}
+
+            if side == "BUY":
+                order_type = mt5.ORDER_TYPE_BUY
+                price = tick.ask
+            else:
+                order_type = mt5.ORDER_TYPE_SELL
+                price = tick.bid
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": lot_size,
+                "type": order_type,
+                "price": price,
+                "deviation": self.config.get('deviation', 5),
+                "magic": self.config.get('magic_number', 987654321),
+                "comment": f"MANUAL_{side}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+
+            result = mt5.order_send(request)
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                request["type_filling"] = mt5.ORDER_FILLING_FOK
+                result = mt5.order_send(request)
+
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.log_message(f"✅ MANUAL {side}: {lot_size} @ {price:.5f}", "INFO")
+                self.daily_trades += 1
+                return {'success': True, 'ticket': result.order, 'price': result.price}
+            else:
+                return {'success': False, 'error': f"{result.retcode} - {result.comment}"}
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
     def close_position(self, ticket):
-        """Close specific REAL position by ticket"""
+        """Close specific position"""
         try:
             if not MT5_AVAILABLE or not self.is_connected:
                 return False
 
-            # Get position info
             positions = mt5.positions_get(ticket=ticket)
             if not positions:
-                self.log_message(f"❌ Position {ticket} not found", "ERROR")
                 return False
 
             position = positions[0]
             symbol = position.symbol
 
-            # Determine close parameters
             if position.type == mt5.POSITION_TYPE_BUY:
                 order_type = mt5.ORDER_TYPE_SELL
                 price = mt5.symbol_info_tick(symbol).bid
@@ -1215,7 +1234,6 @@ class BotController(QObject):
                 order_type = mt5.ORDER_TYPE_BUY
                 price = mt5.symbol_info_tick(symbol).ask
 
-            # Close request
             close_request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,
@@ -1224,118 +1242,20 @@ class BotController(QObject):
                 "position": ticket,
                 "price": price,
                 "deviation": 20,
-                "magic": self.config.get('magic_number', 234567),
+                "magic": self.config.get('magic_number', 987654321),
                 "comment": "MANUAL_CLOSE",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
 
             result = mt5.order_send(close_request)
-
             if result.retcode == mt5.TRADE_RETCODE_DONE:
-                self.log_message(f"✅ Position {ticket} closed successfully", "INFO")
+                self.log_message(f"✅ Position {ticket} closed", "INFO")
                 return True
             else:
-                self.log_message(f"❌ Failed to close {ticket}: {result.comment}", "ERROR")
+                self.log_message(f"❌ Close failed: {result.comment}", "ERROR")
                 return False
 
         except Exception as e:
             self.log_message(f"Close position error: {e}", "ERROR")
             return False
-
-    def get_execution_stats(self):
-        """Get current execution statistics"""
-        return self.execution_stats.copy()
-
-    def export_logs(self, filename):
-        """Export logs to file"""
-        try:
-            import shutil
-            shutil.copy(self.csv_file, filename)
-            self.log_message(f"Logs exported to {filename}", "INFO")
-            return True
-        except Exception as e:
-            self.log_message(f"Export error: {e}", "ERROR")
-            return False
-
-    def diagnostic_check(self):
-        """Run comprehensive diagnostic checks"""
-        try:
-            self.log_message("=== DIAGNOSTIC DOCTOR ===", "INFO")
-
-            # 1. MT5 Connection
-            if self.is_connected:
-                self.log_message("✓ Connected to MT5 (or demo mode)", "INFO")
-            else:
-                self.log_message("✗ Not connected", "ERROR")
-
-            # 2. Symbol info
-            if self.symbol_info:
-                self.log_message(f"✓ Symbol {self.symbol_info.name} loaded", "INFO")
-            else:
-                self.log_message("✗ Symbol info missing", "ERROR")
-
-            # 3. Account info
-            if self.account_info:
-                self.log_message(f"✓ Account balance: ${self.account_info.get('balance', 0):.2f}", "INFO")
-            else:
-                self.log_message("✗ Account info missing", "ERROR")
-
-            # 4. Analysis worker
-            if self.analysis_worker and self.analysis_worker.isRunning():
-                self.log_message("✓ Analysis worker running", "INFO")
-            else:
-                self.log_message("⚠ Analysis worker not running", "WARNING")
-
-            # 5. Data feed
-            if self.current_market_data:
-                self.log_message("✓ Market data feed active", "INFO")
-            else:
-                self.log_message("⚠ No market data", "WARNING")
-
-            self.log_message("=== DIAGNOSTIC COMPLETE ===", "INFO")
-
-        except Exception as e:
-            error_msg = f"Diagnostic error: {e}"
-            self.log_message(error_msg, "ERROR")
-
-    # Configuration methods
-    def set_config(self, key, value):
-        """Update configuration"""
-        self.config[key] = value
-
-    def get_config(self, key):
-        """Get configuration value"""
-        return self.config.get(key)
-
-    def update_tp_sl_config(self, mode, tp_value, sl_value):
-        """Update TP/SL configuration"""
-        self.config['tp_sl_mode'] = mode
-
-        if mode == 'ATR':
-            self.config['atr_multiplier'] = tp_value if tp_value else 2.0
-        elif mode == 'Points':
-            self.config['tp_points'] = tp_value if tp_value else 200
-            self.config['sl_points'] = sl_value if sl_value else 100
-        elif mode == 'Pips':
-            self.config['tp_pips'] = tp_value if tp_value else 20
-            self.config['sl_pips'] = sl_value if sl_value else 10
-        elif mode == 'Balance%':
-            self.config['tp_percent'] = tp_value if tp_value else 1.0
-            self.config['sl_percent'] = sl_value if sl_value else 0.5
-
-    def log_symbol_info(self):
-        """Log symbol information"""
-        try:
-            if not self.symbol_info:
-                return
-
-            self.log_message(f"Symbol: {self.symbol_info.name}", "INFO")
-            self.log_message(f"Point: {self.symbol_info.point}", "INFO")
-            self.log_message(f"Digits: {self.symbol_info.digits}", "INFO")
-            self.log_message(f"Min Volume: {self.symbol_info.volume_min}", "INFO")
-            self.log_message(f"Max Volume: {self.symbol_info.volume_max}", "INFO")
-            self.log_message(f"Volume Step: {self.symbol_info.volume_step}", "INFO")
-
-        except Exception as e:
-            self.log_message(f"Symbol info logging error: {e}", "ERROR")

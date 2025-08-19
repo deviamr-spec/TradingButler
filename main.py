@@ -147,55 +147,59 @@ def main():
     try:
         import MetaTrader5 as mt5
         MT5_AVAILABLE = True
+        logger.info("✅ MetaTrader5 module loaded successfully")
     except ImportError:
         MT5_AVAILABLE = False
         logger.error("❌ CRITICAL: MetaTrader5 module not installed!")
         logger.error("❌ Install with: pip install MetaTrader5")
         logger.error("❌ Real trading requires MT5 Python API")
+        
+        print("\n" + "="*60)
+        print("CRITICAL ERROR: METATRADER5 MODULE NOT INSTALLED")
+        print("This bot requires MetaTrader5 Python API for live trading.")
+        print("Please install MetaTrader5:")
+        print("pip install MetaTrader5")
+        print("="*60)
+        return 1
 
     # Test real MT5 connection immediately
-    if MT5_AVAILABLE:
-        if mt5.initialize():
-            account_info = mt5.account_info()
-            if account_info is not None:
-                logger.info(f"✅ REAL MT5 CONNECTED - Account: {account_info.login}")
-                logger.info(f"✅ Live Balance: ${account_info.balance:.2f}")
-                logger.info(f"✅ Server: {account_info.server if hasattr(account_info, 'server') else 'Unknown'}")
-                logger.info("🚀 LIVE MONEY TRADING MODE ACTIVATED")
-                mt5.shutdown()  # Close test connection
-            else:
-                logger.error("❌ CRITICAL: MT5 not logged in!")
-                logger.error("❌ Please login to MetaTrader 5 terminal first")
-                logger.error("❌ Real money trading requires valid account")
-                MT5_AVAILABLE = False
-
-                # Exit if no real account
-                print("\n" + "="*60)
-                print("CRITICAL ERROR: NO REAL MT5 ACCOUNT DETECTED")
-                print("This bot requires a real MetaTrader 5 account for live trading.")
-                print("Please:")
-                print("1. Open MetaTrader 5 terminal")
-                print("2. Login with your real trading account")
-                print("3. Ensure 'Allow automated trading' is enabled")
-                print("4. Restart this application")
-                print("="*60)
-                return 1
+    logger.info("🔍 Testing MT5 connection...")
+    if mt5.initialize():
+        account_info = mt5.account_info()
+        if account_info is not None:
+            logger.info(f"✅ REAL MT5 CONNECTED - Account: {account_info.login}")
+            logger.info(f"✅ Live Balance: ${account_info.balance:.2f}")
+            logger.info(f"✅ Server: {account_info.server if hasattr(account_info, 'server') else 'Unknown'}")
+            logger.info("🚀 LIVE MONEY TRADING MODE ACTIVATED")
+            mt5.shutdown()  # Close test connection
         else:
-            logger.error("❌ CRITICAL: MT5 initialization failed!")
-            logger.error("❌ Check MetaTrader 5 installation")
-            MT5_AVAILABLE = False
-
+            logger.error("❌ CRITICAL: MT5 not logged in!")
+            logger.error("❌ Please login to MetaTrader 5 terminal first")
+            logger.error("❌ Real money trading requires valid account")
+            
             print("\n" + "="*60)
-            print("CRITICAL ERROR: METATRADER 5 NOT AVAILABLE")
-            print("This bot requires MetaTrader 5 for live trading.")
-            print("Please install MetaTrader 5 and try again.")
+            print("CRITICAL ERROR: NO REAL MT5 ACCOUNT DETECTED")
+            print("This bot requires a real MetaTrader 5 account for live trading.")
+            print("Please:")
+            print("1. Open MetaTrader 5 terminal")
+            print("2. Login with your real trading account")
+            print("3. Ensure 'Allow automated trading' is enabled")
+            print("4. Restart this application")
             print("="*60)
             return 1
-
-    # Allow startup even without MT5 for development/testing
-    if not MT5_AVAILABLE:
-        logger.warning("⚠️ MT5 module not available - Demo mode will be used")
-        logger.info("For live trading, install MetaTrader5: pip install MetaTrader5")
+    else:
+        logger.error("❌ CRITICAL: MT5 initialization failed!")
+        logger.error("❌ Check MetaTrader 5 installation and terminal status")
+        
+        print("\n" + "="*60)
+        print("CRITICAL ERROR: METATRADER 5 CONNECTION FAILED")
+        print("Please ensure:")
+        print("1. MetaTrader 5 terminal is running")
+        print("2. You are logged into your account")
+        print("3. 'Allow automated trading' is enabled")
+        print("4. Check Tools → Options → Expert Advisors")
+        print("="*60)
+        return 1
 
     # Create QApplication
     app = QApplication(sys.argv)
