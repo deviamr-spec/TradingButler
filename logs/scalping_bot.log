@@ -359,3 +359,10 @@
 2025-08-19 06:24:33,384 - __main__ - INFO - READY FOR PROFESSIONAL SCALPING ON XAUUSD
 2025-08-19 06:24:33,384 - __main__ - INFO - Start → Connect → Start Bot untuk mulai trading!
 2025-08-19 06:24:33,384 - __main__ - INFO - ============================================================
+2025-08-19 06:55:42,601 - __main__ - INFO - ============================================================
+2025-08-19 06:55:42,601 - __main__ - INFO - STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY
+2025-08-19 06:55:42,601 - __main__ - INFO - ============================================================
+2025-08-19 06:55:42,601 - __main__ - ERROR - ❌ CRITICAL: MetaTrader5 module not installed!
+2025-08-19 06:55:42,602 - __main__ - ERROR - ❌ Install with: pip install MetaTrader5
+2025-08-19 06:55:42,602 - __main__ - ERROR - ❌ Real trading requires MT5 Python API
+2025-08-19 06:55:42,602 - __main__ - ERROR - ❌ STARTUP REJECTED - REAL MT5 REQUIRED
