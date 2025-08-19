@@ -864,7 +864,7 @@ class MainWindow(QMainWindow):
     def on_connect(self):
         """Handle connect button with detailed error messages"""
         try:
-            self.log_message("🔄 Attempting MT5 connection...", "INFO")
+            self.controller.log_message("🔄 Attempting MT5 connection...", "INFO")
             
             if self.controller.connect_mt5():
                 self.update_connection_status(True)
@@ -895,7 +895,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.update_connection_status(False)
             error_msg = f"Connection failed: {str(e)}"
-            self.log_message(error_msg, "ERROR")
+            self.controller.log_message(error_msg, "ERROR")
             QMessageBox.critical(self, "Connection Error", 
                                f"Connection failed with error:\n\n{error_msg}\n\n"
                                "Please check that:\n"
@@ -1042,12 +1042,13 @@ class MainWindow(QMainWindow):
             formatted = f'<span style="color: {color};">[{level}] {message}</span>'
 
             # Use QTextEdit append method which is universal
-            self.log_display.append(f"[{level}] {message}")
+            if hasattr(self, 'log_display') and self.log_display:
+                self.log_display.append(f"[{level}] {message}")
 
-            # Auto-scroll to bottom
-            cursor = self.log_display.textCursor()
-            cursor.movePosition(cursor.MoveOperation.End)
-            self.log_display.setTextCursor(cursor)
+                # Auto-scroll to bottom
+                cursor = self.log_display.textCursor()
+                cursor.movePosition(cursor.MoveOperation.End)
+                self.log_display.setTextCursor(cursor)
 
         except Exception as e:
             print(f"Log message error: {e}")
