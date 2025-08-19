@@ -1,4 +1,3 @@
-
 """
 FIXED MT5 Scalping Bot Controller - PRODUCTION READY
 Complete fixes for MT5 connection and auto-trading
@@ -53,7 +52,7 @@ class AnalysisWorker(QThread):
         self.indicators = TechnicalIndicators()
         self.last_m1_time = None
         self.logger = logging.getLogger(__name__)
-        
+
         # Remove demo mode completely
         self.last_signal_time = 0
         self.signal_cooldown = 5  # 5 seconds between signals
@@ -130,7 +129,7 @@ class AnalysisWorker(QThread):
         """Get current market data from MT5"""
         try:
             symbol = self.controller.config['symbol']
-            
+
             # Get current tick
             tick = mt5.symbol_info_tick(symbol)
             if not tick:
@@ -166,7 +165,7 @@ class AnalysisWorker(QThread):
 
             # M1 Analysis
             m1_analysis = self.analyze_timeframe(rates_m1, 'M1')
-            
+
             # M5 Analysis  
             m5_analysis = self.analyze_timeframe(rates_m5, 'M5')
 
@@ -236,7 +235,7 @@ class AnalysisWorker(QThread):
 
             # ENHANCED SCALPING STRATEGY
             signal = self.evaluate_scalping_strategy(m1, m5, tick, spread_points, point)
-            
+
             return signal
 
         except Exception as e:
@@ -260,17 +259,27 @@ class AnalysisWorker(QThread):
             if m5_trend == 'SIDEWAYS':
                 return {'side': None, 'reason': 'sideways_market'}
 
-            # 4. Entry conditions (M1 timeframe)
+            # 4. Entry conditions (M1 timeframe) - Enhanced for XAUUSD
             entry_signal = self.check_entry_conditions(m1, m5_trend, tick)
             if not entry_signal:
+                # Log why no signal
+                self.logger.debug(f"No entry signal - M5 trend: {m5_trend}, M1 close: {m1.get('close', 0)}")
                 return {'side': None, 'reason': 'no_entry_signal'}
 
-            # 5. Risk assessment
+            # 5. Risk validation
+            if not self.validate_risk():
+                self.logger.warning("Risk limits exceeded")
+                return {'side': None, 'reason': 'risk_exceeded'}
+
+            # Log successful signal
+            self.logger.info(f"SIGNAL GENERATED: {entry_signal['side']} - Confidence: {entry_signal.get('confidence', 0)}")
+
+            # 6. Risk assessment
             atr_points = m1.get('atr', 0) / point
             if atr_points < 50:  # Minimum volatility for scalping
                 return {'side': None, 'reason': 'low_volatility'}
 
-            # 6. Final signal confirmation
+            # 7. Final signal confirmation
             side = entry_signal['side']
             confidence = entry_signal['confidence']
 
@@ -389,7 +398,7 @@ class BotController(QObject):
 
         # MANDATORY: Verify MT5 module
         if not MT5_AVAILABLE:
-            self.log_message("❌ CRITICAL: MetaTrader5 module not installed!", "ERROR")
+            self.log_message("❌ CRITICAL: MetaTrader5 module not installed", "ERROR")
             self.log_message("❌ Real trading REQUIRES MT5 Python API", "ERROR")
             self.log_message("❌ Install command: pip install MetaTrader5", "ERROR")
 
@@ -538,7 +547,7 @@ class BotController(QObject):
                     mt5.shutdown()
                     import time
                     time.sleep(2)
-                    
+
                     if mt5.initialize():
                         connection_successful = True
                         self.log_message("✅ Reset connection successful!", "INFO")
@@ -567,7 +576,7 @@ class BotController(QObject):
             self.account_info = account_info._asdict()
             self.log_message(f"✅ Account connected: {self.account_info['login']}", "INFO")
             self.log_message(f"✅ Live balance: ${self.account_info['balance']:.2f}", "INFO")
-            
+
             # Validate symbol
             symbol = self.config['symbol']
             if not mt5.symbol_select(symbol, True):
@@ -747,7 +756,7 @@ class BotController(QObject):
             if result.retcode == mt5.TRADE_RETCODE_DONE:
                 self.log_message(f"✅ REAL ORDER EXECUTED: {side} {lot_size} @ {price:.5f}", "INFO")
                 self.log_message(f"✅ Ticket: {result.order} | SL: {sl_price:.5f} | TP: {tp_price:.5f}", "INFO")
-                
+
                 self.daily_trades += 1
                 self.log_trade_to_csv(signal, result, lot_size, sl_price, tp_price)
                 return True
@@ -777,7 +786,7 @@ class BotController(QObject):
             # Enhanced SL calculation based on signal
             point = self.symbol_info.point
             atr_points = signal.get('atr_points', 100)
-            
+
             # Adaptive SL based on volatility
             if atr_points > 200:
                 sl_points = atr_points * 0.8  # Wider SL for high volatility
@@ -826,7 +835,7 @@ class BotController(QObject):
             if mode == "ATR":
                 # Enhanced ATR-based calculation
                 confidence = signal.get('confidence', 0.5)
-                
+
                 # Adaptive multipliers based on confidence
                 if confidence > 0.8:
                     sl_multiplier = 1.0   # Tighter SL for high confidence
@@ -851,10 +860,10 @@ class BotController(QObject):
             elif mode == "Balance%":
                 balance = self.account_info.get('balance', 10000)
                 tick_value = getattr(self.symbol_info, 'trade_tick_value', 1.0)
-                
+
                 sl_amount = balance * (self.config.get('sl_percent', 0.5) / 100)
                 tp_amount = balance * (self.config.get('tp_percent', 1.0) / 100)
-                
+
                 sl_distance = sl_amount / (point * tick_value)
                 tp_distance = tp_amount / (point * tick_value)
 
@@ -889,7 +898,7 @@ class BotController(QObject):
             if self.account_info:
                 balance = self.account_info.get('balance', 0)
                 equity = self.account_info.get('equity', 0)
-                
+
                 if balance > 0:
                     drawdown = ((balance - equity) / balance) * 100
                     if drawdown > 3.0:  # 3% max drawdown
@@ -966,7 +975,7 @@ class BotController(QObject):
         """Stop enhanced bot"""
         try:
             self.is_running = False
-            
+
             if self.analysis_worker and self.analysis_worker.isRunning():
                 self.analysis_worker.stop()
 
