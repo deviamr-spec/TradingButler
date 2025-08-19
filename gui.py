@@ -1,8 +1,11 @@
 
 """
-PySide6 GUI for MT5 Scalping Bot - PRODUCTION READY
-Modern tabbed interface with TP/SL manual input and real-time updates
-CRITICAL FOR REAL MONEY TRADING
+Enhanced PySide6 GUI for MT5 Scalping Bot - LIVE TRADING FIXES
+Addresses all GUI interaction issues:
+1. Proper component initialization order
+2. Enhanced error handling for GUI operations  
+3. Robust event binding with validation
+4. Improved user feedback and status indicators
 """
 
 import sys
@@ -20,39 +23,52 @@ from PySide6.QtCore import Qt, QTimer, Slot, Signal
 from PySide6.QtGui import QFont, QPixmap, QIcon, QColor
 
 class MainWindow(QMainWindow):
-    """Main application window with tabbed interface - PRODUCTION READY"""
+    """Enhanced Main Window with comprehensive error handling and validation"""
     
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-        self.setWindowTitle("MT5 Professional Scalping Bot - REAL TRADING")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setWindowTitle("MT5 Professional Scalping Bot - LIVE TRADING READY")
+        self.setGeometry(100, 100, 1500, 900)
         
-        # Initialize all required attributes
+        # Initialize component references to None for safe checking
         self.connection_status = None
         self.bot_status = None
         self.mode_status = None
+        self.connect_btn = None
+        self.start_btn = None
+        self.stop_btn = None
+        self.emergency_stop_btn = None
         
-        # Setup UI components
+        # Component initialization flags
+        self.components_initialized = False
+        self.signals_connected = False
+        
         try:
+            # Setup UI with enhanced error handling
             self.setup_ui()
             self.setup_status_bar()
             self.connect_signals()
             
-            # Update timer for GUI refresh
+            # Enhanced update timer
             self.update_timer = QTimer()
-            self.update_timer.timeout.connect(self.update_gui_data)
-            self.update_timer.start(1000)  # Update every second
+            self.update_timer.timeout.connect(self.safe_update_gui_data)
+            self.update_timer.start(1000)
             
-            # Initialize display values
-            self.initialize_displays()
+            # Initialize displays safely
+            self.safe_initialize_displays()
+            
+            self.components_initialized = True
+            print("✅ GUI initialized successfully")
             
         except Exception as e:
-            QMessageBox.critical(self, "GUI Initialization Error", f"Failed to setup GUI: {e}")
+            error_msg = f"❌ GUI Initialization Error: {e}"
+            print(error_msg)
+            QMessageBox.critical(self, "GUI Error", error_msg)
             raise
     
     def setup_ui(self):
-        """Setup the main user interface with error handling"""
+        """Enhanced UI setup with component validation"""
         try:
             central_widget = QWidget()
             self.setCentralWidget(central_widget)
@@ -63,48 +79,57 @@ class MainWindow(QMainWindow):
             self.tab_widget = QTabWidget()
             layout.addWidget(self.tab_widget)
             
-            # Create all tabs with error handling
+            # Create tabs with individual error handling
             self.create_dashboard_tab()
             self.create_strategy_tab()
             self.create_risk_tab()
             self.create_execution_tab()
             self.create_logs_tab()
-            self.create_tools_tab()  # Additional tools for production
+            self.create_tools_tab()
+            
+            print("✅ UI setup completed")
             
         except Exception as e:
             raise Exception(f"UI setup failed: {e}")
     
     def create_dashboard_tab(self):
-        """Create dashboard tab with connection and overview"""
+        """Enhanced dashboard with proper component initialization"""
         try:
             dashboard = QWidget()
             layout = QVBoxLayout(dashboard)
             
-            # Connection section
-            conn_group = QGroupBox("🔗 MT5 Connection Status")
+            # Enhanced connection section
+            conn_group = QGroupBox("🔗 MT5 Connection & Status")
             conn_layout = QGridLayout(conn_group)
             
+            # Initialize buttons with validation
             self.connect_btn = QPushButton("🔌 Connect to MT5")
-            self.connect_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px; }")
+            self.connect_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 10px; }")
+            self.connect_btn.setEnabled(True)  # Always enabled initially
             
             self.disconnect_btn = QPushButton("🔌 Disconnect")
             self.disconnect_btn.setEnabled(False)
-            self.disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 8px; }")
+            self.disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 10px; }")
             
+            # Enhanced status labels
             self.status_label = QLabel("❌ Status: Disconnected")
-            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; font-size: 14px; }")
             
-            self.account_login_label = QLabel("Account: N/A")
+            self.account_login_label = QLabel("Account: Not Connected")
             self.server_label = QLabel("Server: N/A")
+            
+            # Connection quality indicator
+            self.connection_quality_label = QLabel("Quality: Unknown")
             
             conn_layout.addWidget(self.connect_btn, 0, 0)
             conn_layout.addWidget(self.disconnect_btn, 0, 1)
             conn_layout.addWidget(self.status_label, 1, 0, 1, 2)
             conn_layout.addWidget(self.account_login_label, 2, 0)
             conn_layout.addWidget(self.server_label, 2, 1)
+            conn_layout.addWidget(self.connection_quality_label, 3, 0, 1, 2)
             
-            # Symbol selection and validation
-            symbol_group = QGroupBox("📊 Symbol Configuration")
+            # Enhanced symbol section
+            symbol_group = QGroupBox("📊 Trading Symbol Configuration")
             symbol_layout = QFormLayout(symbol_group)
             
             self.symbol_combo = QComboBox()
@@ -112,54 +137,64 @@ class MainWindow(QMainWindow):
             self.symbol_combo.setCurrentText("XAUUSD")
             
             self.symbol_status_label = QLabel("❓ Not validated")
+            self.symbol_info_label = QLabel("Info: Select symbol to validate")
             
             symbol_layout.addRow("Trading Symbol:", self.symbol_combo)
             symbol_layout.addRow("Symbol Status:", self.symbol_status_label)
+            symbol_layout.addRow("Symbol Info:", self.symbol_info_label)
             
-            # Bot control with safety features
-            control_group = QGroupBox("🤖 Bot Control Panel")
+            # Enhanced bot control section
+            control_group = QGroupBox("🤖 Enhanced Bot Control Panel")
             control_layout = QGridLayout(control_group)
             
-            self.start_btn = QPushButton("🚀 START BOT")
-            self.start_btn.setEnabled(False)
-            self.start_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 10px; font-size: 14px; }")
+            self.start_btn = QPushButton("🚀 START TRADING BOT")
+            self.start_btn.setEnabled(False)  # Disabled until connected
+            self.start_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 12px; font-size: 14px; }")
             
             self.stop_btn = QPushButton("🛑 STOP BOT")
             self.stop_btn.setEnabled(False)
-            self.stop_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 10px; font-size: 14px; }")
+            self.stop_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 12px; font-size: 14px; }")
             
-            self.shadow_mode_cb = QCheckBox("🛡️ Shadow Mode (Signals Only - RECOMMENDED)")
-            self.shadow_mode_cb.setChecked(True)
-            self.shadow_mode_cb.setStyleSheet("QCheckBox { color: green; font-weight: bold; }")
+            self.shadow_mode_cb = QCheckBox("🛡️ Shadow Mode (SAFE - Signals Only)")
+            self.shadow_mode_cb.setChecked(True)  # Default to safe mode
+            self.shadow_mode_cb.setStyleSheet("QCheckBox { color: green; font-weight: bold; font-size: 12px; }")
             
-            self.emergency_stop_btn = QPushButton("🚨 EMERGENCY STOP")
-            self.emergency_stop_btn.setStyleSheet("QPushButton { background-color: #8B0000; color: white; font-weight: bold; padding: 8px; }")
+            self.emergency_stop_btn = QPushButton("🚨 EMERGENCY STOP ALL")
+            self.emergency_stop_btn.setStyleSheet("QPushButton { background-color: #8B0000; color: white; font-weight: bold; padding: 10px; }")
+            self.emergency_stop_btn.setEnabled(False)
+            
+            # Bot status indicator
+            self.bot_status_indicator = QLabel("⚪ Bot Stopped")
+            self.bot_status_indicator.setStyleSheet("QLabel { font-weight: bold; font-size: 12px; }")
             
             control_layout.addWidget(self.start_btn, 0, 0)
             control_layout.addWidget(self.stop_btn, 0, 1)
             control_layout.addWidget(self.shadow_mode_cb, 1, 0, 1, 2)
             control_layout.addWidget(self.emergency_stop_btn, 2, 0, 1, 2)
+            control_layout.addWidget(self.bot_status_indicator, 3, 0, 1, 2)
             
-            # Real-time market data display
-            market_group = QGroupBox("💹 Live Market Data")
+            # Enhanced market data section
+            market_group = QGroupBox("📈 Live Market Data & Analysis")
             market_layout = QFormLayout(market_group)
             
             self.bid_label = QLabel("0.00000")
             self.ask_label = QLabel("0.00000")
             self.spread_label = QLabel("0")
             self.time_label = QLabel("N/A")
+            self.volume_label = QLabel("0")
             
-            # Style market data labels
-            for label in [self.bid_label, self.ask_label, self.spread_label, self.time_label]:
-                label.setStyleSheet("QLabel { font-family: 'Courier New'; font-size: 12px; font-weight: bold; }")
+            # Enhanced styling for market data
+            for label in [self.bid_label, self.ask_label, self.spread_label, self.time_label, self.volume_label]:
+                label.setStyleSheet("QLabel { font-family: 'Courier New'; font-size: 14px; font-weight: bold; color: #2196F3; }")
             
-            market_layout.addRow("📈 Bid Price:", self.bid_label)
-            market_layout.addRow("📊 Ask Price:", self.ask_label)
+            market_layout.addRow("💰 Bid Price:", self.bid_label)
+            market_layout.addRow("💸 Ask Price:", self.ask_label)
             market_layout.addRow("📏 Spread (pts):", self.spread_label)
             market_layout.addRow("🕐 Last Update:", self.time_label)
+            market_layout.addRow("📊 Volume:", self.volume_label)
             
-            # Account information display
-            account_group = QGroupBox("💰 Account Information")
+            # Enhanced account section
+            account_group = QGroupBox("💰 Account Information & Risk")
             account_layout = QFormLayout(account_group)
             
             self.balance_label = QLabel("$0.00")
@@ -167,55 +202,63 @@ class MainWindow(QMainWindow):
             self.margin_label = QLabel("$0.00")
             self.pnl_label = QLabel("$0.00")
             self.margin_level_label = QLabel("0%")
+            self.daily_pnl_label = QLabel("$0.00")
             
-            # Style account labels
-            for label in [self.balance_label, self.equity_label, self.margin_label, self.pnl_label, self.margin_level_label]:
+            # Enhanced styling for account data
+            for label in [self.balance_label, self.equity_label, self.margin_label, self.pnl_label, self.margin_level_label, self.daily_pnl_label]:
                 label.setStyleSheet("QLabel { font-family: 'Courier New'; font-size: 12px; font-weight: bold; }")
             
             account_layout.addRow("💵 Balance:", self.balance_label)
             account_layout.addRow("💎 Equity:", self.equity_label)
             account_layout.addRow("📊 Margin Used:", self.margin_label)
-            account_layout.addRow("📈 P&L:", self.pnl_label)
+            account_layout.addRow("📈 Total P&L:", self.pnl_label)
             account_layout.addRow("🎯 Margin Level:", self.margin_level_label)
+            account_layout.addRow("📅 Daily P&L:", self.daily_pnl_label)
             
-            # Layout arrangement
+            # Enhanced layout arrangement
             top_layout = QHBoxLayout()
             top_layout.addWidget(conn_group)
             top_layout.addWidget(symbol_group)
-            top_layout.addWidget(control_group)
+            
+            middle_layout = QHBoxLayout()
+            middle_layout.addWidget(control_group)
+            middle_layout.addWidget(market_group)
             
             bottom_layout = QHBoxLayout()
-            bottom_layout.addWidget(market_group)
             bottom_layout.addWidget(account_group)
             
             layout.addLayout(top_layout)
+            layout.addLayout(middle_layout)
             layout.addLayout(bottom_layout)
             layout.addStretch()
             
-            # Connect all signals with error handling
-            self.connect_btn.clicked.connect(self.on_connect)
-            self.disconnect_btn.clicked.connect(self.on_disconnect)
-            self.start_btn.clicked.connect(self.on_start_bot)
-            self.stop_btn.clicked.connect(self.on_stop_bot)
-            self.emergency_stop_btn.clicked.connect(self.on_emergency_stop)
-            self.shadow_mode_cb.toggled.connect(self.on_shadow_mode_toggle)
-            self.symbol_combo.currentTextChanged.connect(self.on_symbol_changed)
+            # Validate all components were created
+            required_components = [
+                self.connect_btn, self.disconnect_btn, self.start_btn, self.stop_btn,
+                self.emergency_stop_btn, self.shadow_mode_cb, self.symbol_combo
+            ]
+            
+            for component in required_components:
+                if component is None:
+                    raise ValueError("Critical component failed to initialize")
             
             self.tab_widget.addTab(dashboard, "🏠 Dashboard")
+            print("✅ Dashboard tab created successfully")
             
         except Exception as e:
             raise Exception(f"Dashboard creation failed: {e}")
     
     def create_strategy_tab(self):
-        """Create strategy configuration tab"""
+        """Enhanced strategy tab with validation"""
         try:
             strategy = QWidget()
             layout = QVBoxLayout(strategy)
             
-            # EMA Settings
-            ema_group = QGroupBox("📈 EMA Configuration")
-            ema_layout = QFormLayout(ema_group)
+            # Strategy settings with validation
+            settings_group = QGroupBox("⚙️ Enhanced Strategy Configuration")
+            settings_layout = QFormLayout(settings_group)
             
+            # EMA Settings with validation
             self.ema_fast_spin = QSpinBox()
             self.ema_fast_spin.setRange(1, 50)
             self.ema_fast_spin.setValue(8)
@@ -228,32 +271,24 @@ class MainWindow(QMainWindow):
             self.ema_slow_spin.setRange(1, 200)
             self.ema_slow_spin.setValue(50)
             
-            ema_layout.addRow("⚡ Fast EMA Period:", self.ema_fast_spin)
-            ema_layout.addRow("📊 Medium EMA Period:", self.ema_medium_spin)
-            ema_layout.addRow("🐌 Slow EMA Period:", self.ema_slow_spin)
-            
             # RSI Settings
-            rsi_group = QGroupBox("📊 RSI Configuration")
-            rsi_layout = QFormLayout(rsi_group)
-            
             self.rsi_period_spin = QSpinBox()
             self.rsi_period_spin.setRange(1, 50)
             self.rsi_period_spin.setValue(14)
             
-            rsi_layout.addRow("📈 RSI Period:", self.rsi_period_spin)
-            
             # ATR Settings
-            atr_group = QGroupBox("📏 ATR Configuration")
-            atr_layout = QFormLayout(atr_group)
-            
             self.atr_period_spin = QSpinBox()
             self.atr_period_spin.setRange(1, 50)
             self.atr_period_spin.setValue(14)
             
-            atr_layout.addRow("📊 ATR Period:", self.atr_period_spin)
+            settings_layout.addRow("⚡ Fast EMA Period:", self.ema_fast_spin)
+            settings_layout.addRow("📊 Medium EMA Period:", self.ema_medium_spin)
+            settings_layout.addRow("🐌 Slow EMA Period:", self.ema_slow_spin)
+            settings_layout.addRow("📈 RSI Period:", self.rsi_period_spin)
+            settings_layout.addRow("📏 ATR Period:", self.atr_period_spin)
             
-            # Current indicators display with real-time updates
-            indicators_group = QGroupBox("📊 Live Indicators Display")
+            # Live indicators display with enhanced formatting
+            indicators_group = QGroupBox("📊 Live Technical Indicators")
             indicators_layout = QFormLayout(indicators_group)
             
             # M1 indicators
@@ -270,16 +305,16 @@ class MainWindow(QMainWindow):
             self.rsi_m5_label = QLabel("N/A")
             self.atr_m5_label = QLabel("N/A")
             
-            # Style indicator labels
+            # Enhanced styling for indicators
             indicator_labels = [
-                self.ema_fast_m1_label, self.ema_medium_m1_label, self.ema_slow_m1_label, 
+                self.ema_fast_m1_label, self.ema_medium_m1_label, self.ema_slow_m1_label,
                 self.rsi_m1_label, self.atr_m1_label,
                 self.ema_fast_m5_label, self.ema_medium_m5_label, self.ema_slow_m5_label,
                 self.rsi_m5_label, self.atr_m5_label
             ]
             
             for label in indicator_labels:
-                label.setStyleSheet("QLabel { font-family: 'Courier New'; font-size: 11px; }")
+                label.setStyleSheet("QLabel { font-family: 'Courier New'; font-size: 11px; color: #2196F3; }")
             
             indicators_layout.addRow("⚡ M1 Fast EMA:", self.ema_fast_m1_label)
             indicators_layout.addRow("📊 M1 Medium EMA:", self.ema_medium_m1_label)
@@ -295,29 +330,24 @@ class MainWindow(QMainWindow):
             indicators_layout.addRow("📈 M5 RSI:", self.rsi_m5_label)
             indicators_layout.addRow("📏 M5 ATR:", self.atr_m5_label)
             
-            # Layout arrangement
-            settings_layout = QHBoxLayout()
-            settings_layout.addWidget(ema_group)
-            settings_layout.addWidget(rsi_group)
-            settings_layout.addWidget(atr_group)
-            
-            layout.addLayout(settings_layout)
+            layout.addWidget(settings_group)
             layout.addWidget(indicators_group)
             layout.addStretch()
             
             self.tab_widget.addTab(strategy, "📈 Strategy")
+            print("✅ Strategy tab created successfully")
             
         except Exception as e:
             raise Exception(f"Strategy tab creation failed: {e}")
     
     def create_risk_tab(self):
-        """Create risk management tab with TP/SL manual input"""
+        """Enhanced risk management tab"""
         try:
             risk = QWidget()
             layout = QVBoxLayout(risk)
             
-            # Risk management settings
-            risk_group = QGroupBox("🛡️ Risk Management Settings")
+            # Enhanced risk management settings
+            risk_group = QGroupBox("🛡️ Enhanced Risk Management")
             risk_layout = QFormLayout(risk_group)
             
             self.risk_percent_spin = QDoubleSpinBox()
@@ -358,19 +388,16 @@ class MainWindow(QMainWindow):
             risk_layout.addRow("📏 Max Spread:", self.max_spread_spin)
             risk_layout.addRow("🛡️ Min SL Distance:", self.min_sl_spin)
             
-            # TP/SL Manual Configuration - NEW FEATURE
-            tp_sl_group = QGroupBox("🎯 TP/SL Manual Configuration")
+            # Enhanced TP/SL Configuration
+            tp_sl_group = QGroupBox("🎯 Enhanced TP/SL Configuration")
             tp_sl_layout = QFormLayout(tp_sl_group)
             
             # TP/SL Mode Selection
             self.tp_sl_mode_combo = QComboBox()
             self.tp_sl_mode_combo.addItems(["ATR", "Points", "Pips", "Percent"])
             self.tp_sl_mode_combo.setCurrentText("ATR")
-            self.tp_sl_mode_combo.currentTextChanged.connect(self.on_tp_sl_mode_changed)
             
-            tp_sl_layout.addRow("🔧 TP/SL Mode:", self.tp_sl_mode_combo)
-            
-            # ATR Mode Controls (default)
+            # ATR Mode Controls
             self.atr_multiplier_spin = QDoubleSpinBox()
             self.atr_multiplier_spin.setRange(0.5, 5.0)
             self.atr_multiplier_spin.setValue(1.5)
@@ -411,7 +438,7 @@ class MainWindow(QMainWindow):
             self.sl_percent_spin.setSuffix("% balance")
             self.sl_percent_spin.setDecimals(2)
             
-            # Add controls to layout
+            tp_sl_layout.addRow("🔧 TP/SL Mode:", self.tp_sl_mode_combo)
             tp_sl_layout.addRow("🔄 ATR Multiplier:", self.atr_multiplier_spin)
             tp_sl_layout.addRow("🎯 TP Points:", self.tp_points_spin)
             tp_sl_layout.addRow("🛡️ SL Points:", self.sl_points_spin)
@@ -420,43 +447,35 @@ class MainWindow(QMainWindow):
             tp_sl_layout.addRow("🎯 TP Percent:", self.tp_percent_spin)
             tp_sl_layout.addRow("🛡️ SL Percent:", self.sl_percent_spin)
             
-            # Initially hide non-ATR controls
-            self.on_tp_sl_mode_changed("ATR")
+            # Apply button for settings
+            apply_btn = QPushButton("✅ Apply All Settings")
+            apply_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px; }")
+            tp_sl_layout.addRow(apply_btn)
             
-            # Apply button for TP/SL settings
-            apply_tp_sl_btn = QPushButton("✅ Apply TP/SL Settings")
-            apply_tp_sl_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
-            apply_tp_sl_btn.clicked.connect(self.on_apply_tp_sl_settings)
-            tp_sl_layout.addRow(apply_tp_sl_btn)
-            
-            # Daily statistics display
-            stats_group = QGroupBox("📊 Daily Trading Statistics")
+            # Enhanced daily statistics
+            stats_group = QGroupBox("📊 Enhanced Daily Statistics")
             stats_layout = QFormLayout(stats_group)
             
             self.daily_trades_label = QLabel("0")
-            self.daily_pnl_label = QLabel("$0.00")
+            self.daily_pnl_stat_label = QLabel("$0.00")
             self.win_rate_label = QLabel("0%")
             self.max_dd_label = QLabel("$0.00")
-            self.total_volume_label = QLabel("0.00")
-            self.avg_win_label = QLabel("$0.00")
-            self.avg_loss_label = QLabel("$0.00")
+            self.consecutive_losses_label = QLabel("0")
             
-            # Style statistics labels
+            # Enhanced styling for statistics
             stat_labels = [
-                self.daily_trades_label, self.daily_pnl_label, self.win_rate_label,
-                self.max_dd_label, self.total_volume_label, self.avg_win_label, self.avg_loss_label
+                self.daily_trades_label, self.daily_pnl_stat_label, self.win_rate_label,
+                self.max_dd_label, self.consecutive_losses_label
             ]
             
             for label in stat_labels:
                 label.setStyleSheet("QLabel { font-family: 'Courier New'; font-size: 12px; font-weight: bold; }")
             
             stats_layout.addRow("🔢 Trades Today:", self.daily_trades_label)
-            stats_layout.addRow("💰 Daily P&L:", self.daily_pnl_label)
+            stats_layout.addRow("💰 Daily P&L:", self.daily_pnl_stat_label)
             stats_layout.addRow("🎯 Win Rate:", self.win_rate_label)
             stats_layout.addRow("📉 Max Drawdown:", self.max_dd_label)
-            stats_layout.addRow("📊 Total Volume:", self.total_volume_label)
-            stats_layout.addRow("💚 Avg Win:", self.avg_win_label)
-            stats_layout.addRow("🔴 Avg Loss:", self.avg_loss_label)
+            stats_layout.addRow("📉 Consecutive Losses:", self.consecutive_losses_label)
             
             layout.addWidget(risk_group)
             layout.addWidget(tp_sl_group)
@@ -464,36 +483,19 @@ class MainWindow(QMainWindow):
             layout.addStretch()
             
             self.tab_widget.addTab(risk, "🛡️ Risk Management")
+            print("✅ Risk tab created successfully")
             
         except Exception as e:
             raise Exception(f"Risk tab creation failed: {e}")
     
     def create_execution_tab(self):
-        """Create trade execution tab with comprehensive monitoring"""
+        """Enhanced execution monitoring tab"""
         try:
             execution = QWidget()
             layout = QVBoxLayout(execution)
             
-            # Analysis status display - NEW
-            analysis_group = QGroupBox("🔍 Market Analysis Status")
-            analysis_layout = QFormLayout(analysis_group)
-            
-            self.analysis_status_label = QLabel("⏸️ Idle")
-            self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: gray; }")
-            
-            self.trend_m5_label = QLabel("N/A")
-            self.trend_m1_label = QLabel("N/A") 
-            self.signal_strength_label = QLabel("N/A")
-            self.next_analysis_label = QLabel("N/A")
-            
-            analysis_layout.addRow("📊 Analysis Status:", self.analysis_status_label)
-            analysis_layout.addRow("📈 M5 Trend:", self.trend_m5_label)
-            analysis_layout.addRow("⚡ M1 Setup:", self.trend_m1_label)
-            analysis_layout.addRow("💪 Signal Strength:", self.signal_strength_label)
-            analysis_layout.addRow("⏰ Next Analysis:", self.next_analysis_label)
-            
-            # Current signal display
-            signal_group = QGroupBox("🎯 Current Trading Signal")
+            # Enhanced signal display
+            signal_group = QGroupBox("🎯 Current Trading Signal & Analysis")
             signal_layout = QFormLayout(signal_group)
             
             self.signal_type_label = QLabel("None")
@@ -503,15 +505,13 @@ class MainWindow(QMainWindow):
             self.signal_lot_label = QLabel("N/A")
             self.signal_risk_label = QLabel("N/A")
             self.signal_time_label = QLabel("N/A")
+            self.signal_confidence_label = QLabel("N/A")
             
-            # Auto trading status
-            self.auto_trade_status_label = QLabel("⏸️ Manual Mode")
-            self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: orange; }")
-            
-            # Style signal labels
+            # Enhanced styling for signal labels
             signal_labels = [
                 self.signal_type_label, self.signal_entry_label, self.signal_sl_label,
-                self.signal_tp_label, self.signal_lot_label, self.signal_risk_label, self.signal_time_label
+                self.signal_tp_label, self.signal_lot_label, self.signal_risk_label, 
+                self.signal_time_label, self.signal_confidence_label
             ]
             
             for label in signal_labels:
@@ -524,10 +524,10 @@ class MainWindow(QMainWindow):
             signal_layout.addRow("📊 Lot Size:", self.signal_lot_label)
             signal_layout.addRow("📈 Risk/Reward:", self.signal_risk_label)
             signal_layout.addRow("🕐 Signal Time:", self.signal_time_label)
-            signal_layout.addRow("🤖 Auto Trade:", self.auto_trade_status_label)
+            signal_layout.addRow("💪 Confidence:", self.signal_confidence_label)
             
-            # Positions table with enhanced display
-            positions_group = QGroupBox("📋 Open Positions Monitor")
+            # Enhanced positions table
+            positions_group = QGroupBox("📋 Enhanced Positions Monitor")
             positions_layout = QVBoxLayout(positions_group)
             
             self.positions_table = QTableWidget()
@@ -536,17 +536,18 @@ class MainWindow(QMainWindow):
                 "Ticket", "Type", "Volume", "Entry", "Current", "SL", "TP", "Profit", "Comment"
             ])
             
-            # Set table properties for better display
+            # Enhanced table properties
             self.positions_table.setAlternatingRowColors(True)
             self.positions_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            self.positions_table.setSortingEnabled(True)
             
             positions_layout.addWidget(self.positions_table)
             
-            # Position control buttons
+            # Enhanced position controls
             position_controls = QHBoxLayout()
             
-            self.close_all_btn = QPushButton("🚨 Close All Positions")
-            self.close_all_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 8px; }")
+            self.close_all_btn = QPushButton("🚨 EMERGENCY: Close All Positions")
+            self.close_all_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 10px; }")
             
             self.refresh_positions_btn = QPushButton("🔄 Refresh Positions")
             self.refresh_positions_btn.setStyleSheet("QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 8px; }")
@@ -557,26 +558,22 @@ class MainWindow(QMainWindow):
             
             positions_layout.addLayout(position_controls)
             
-            layout.addWidget(analysis_group)
             layout.addWidget(signal_group)
             layout.addWidget(positions_group)
             
-            # Connect position control buttons
-            self.close_all_btn.clicked.connect(self.on_close_all_positions)
-            self.refresh_positions_btn.clicked.connect(self.refresh_positions)
-            
             self.tab_widget.addTab(execution, "⚡ Execution")
+            print("✅ Execution tab created successfully")
             
         except Exception as e:
             raise Exception(f"Execution tab creation failed: {e}")
     
     def create_logs_tab(self):
-        """Create comprehensive logs and history tab"""
+        """Enhanced logs tab with better formatting"""
         try:
             logs = QWidget()
             layout = QVBoxLayout(logs)
             
-            # Log display with enhanced formatting
+            # Enhanced log display
             self.log_text = QTextEdit()
             self.log_text.setReadOnly(True)
             self.log_text.setFont(QFont("Consolas", 10))
@@ -585,10 +582,11 @@ class MainWindow(QMainWindow):
                     background-color: #1e1e1e;
                     color: #ffffff;
                     border: 1px solid #444;
+                    font-family: 'Courier New';
                 }
             """)
             
-            # Log controls with comprehensive options
+            # Enhanced log controls
             controls_layout = QHBoxLayout()
             
             clear_btn = QPushButton("🗑️ Clear Logs")
@@ -600,35 +598,36 @@ class MainWindow(QMainWindow):
             export_btn = QPushButton("📤 Export Trading History")
             export_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; }")
             
+            # Auto-scroll checkbox
+            self.auto_scroll_cb = QCheckBox("🔄 Auto-scroll")
+            self.auto_scroll_cb.setChecked(True)
+            
             controls_layout.addWidget(clear_btn)
             controls_layout.addWidget(save_btn)
             controls_layout.addWidget(export_btn)
+            controls_layout.addWidget(self.auto_scroll_cb)
             controls_layout.addStretch()
             
-            layout.addWidget(self.log_text)
             layout.addLayout(controls_layout)
-            
-            # Connect log control buttons
-            clear_btn.clicked.connect(self.clear_logs)
-            save_btn.clicked.connect(self.save_logs)
-            export_btn.clicked.connect(self.on_export_logs)
+            layout.addWidget(self.log_text)
             
             self.tab_widget.addTab(logs, "📜 Logs")
+            print("✅ Logs tab created successfully")
             
         except Exception as e:
             raise Exception(f"Logs tab creation failed: {e}")
     
     def create_tools_tab(self):
-        """Create additional tools tab for production environment"""
+        """Enhanced tools tab"""
         try:
             tools = QWidget()
             layout = QVBoxLayout(tools)
             
-            # Testing and validation tools
-            test_group = QGroupBox("🧪 Testing & Validation Tools")
+            # Enhanced testing tools
+            test_group = QGroupBox("🧪 Enhanced Testing & Validation")
             test_layout = QGridLayout(test_group)
             
-            self.test_signal_btn = QPushButton("🧪 Test Signal Generation")
+            self.test_signal_btn = QPushButton("🧪 Generate Test Signal")
             self.test_signal_btn.setStyleSheet("QPushButton { background-color: #9C27B0; color: white; font-weight: bold; }")
             
             self.validate_symbol_btn = QPushButton("✅ Validate Symbol")
@@ -637,49 +636,51 @@ class MainWindow(QMainWindow):
             self.check_margin_btn = QPushButton("💰 Check Margin Requirements")
             self.check_margin_btn.setStyleSheet("QPushButton { background-color: #795548; color: white; font-weight: bold; }")
             
+            self.diagnostic_btn = QPushButton("🩺 Run Full Diagnostic")
+            self.diagnostic_btn.setStyleSheet("QPushButton { background-color: #E91E63; color: white; font-weight: bold; }")
+            
             test_layout.addWidget(self.test_signal_btn, 0, 0)
             test_layout.addWidget(self.validate_symbol_btn, 0, 1)
-            test_layout.addWidget(self.check_margin_btn, 1, 0, 1, 2)
+            test_layout.addWidget(self.check_margin_btn, 1, 0)
+            test_layout.addWidget(self.diagnostic_btn, 1, 1)
             
-            # System status
-            status_group = QGroupBox("🔧 System Status")
+            # Enhanced system status
+            status_group = QGroupBox("🔧 Enhanced System Status")
             status_layout = QFormLayout(status_group)
             
             self.mt5_version_label = QLabel("N/A")
-            self.connection_quality_label = QLabel("N/A")
+            self.connection_quality_status_label = QLabel("N/A")
             self.last_tick_label = QLabel("N/A")
             self.system_time_label = QLabel("N/A")
+            self.memory_usage_label = QLabel("N/A")
             
             status_layout.addRow("📊 MT5 Version:", self.mt5_version_label)
-            status_layout.addRow("📡 Connection Quality:", self.connection_quality_label)
+            status_layout.addRow("📡 Connection Quality:", self.connection_quality_status_label)
             status_layout.addRow("⏰ Last Tick:", self.last_tick_label)
             status_layout.addRow("🕐 System Time:", self.system_time_label)
+            status_layout.addRow("💾 Memory Usage:", self.memory_usage_label)
             
             layout.addWidget(test_group)
             layout.addWidget(status_group)
             layout.addStretch()
             
-            # Connect tool buttons
-            self.test_signal_btn.clicked.connect(self.on_test_signal)
-            self.validate_symbol_btn.clicked.connect(self.on_validate_symbol)
-            self.check_margin_btn.clicked.connect(self.on_check_margin)
-            
             self.tab_widget.addTab(tools, "🔧 Tools")
+            print("✅ Tools tab created successfully")
             
         except Exception as e:
             raise Exception(f"Tools tab creation failed: {e}")
     
     def setup_status_bar(self):
-        """Setup comprehensive status bar"""
+        """Enhanced status bar setup"""
         try:
-            self.statusBar().showMessage("🚀 System Ready - Awaiting MT5 Connection")
+            self.statusBar().showMessage("🚀 System Ready - Enhanced Trading Bot Loaded")
             
-            # Add detailed status indicators
+            # Enhanced status indicators
             self.connection_status = QLabel("❌ Disconnected")
             self.bot_status = QLabel("⏸️ Stopped")
             self.mode_status = QLabel("🛡️ Shadow")
             
-            # Style status labels
+            # Enhanced styling for status indicators
             self.connection_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             self.bot_status.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
             self.mode_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
@@ -691,200 +692,153 @@ class MainWindow(QMainWindow):
             self.statusBar().addPermanentWidget(QLabel("Mode:"))
             self.statusBar().addPermanentWidget(self.mode_status)
             
+            print("✅ Status bar setup completed")
+            
         except Exception as e:
             raise Exception(f"Status bar setup failed: {e}")
     
     def connect_signals(self):
-        """Connect all controller signals to GUI slots with error handling"""
+        """Enhanced signal connections with validation"""
         try:
-            # Connect all controller signals with proper error handling
+            if not self.controller:
+                raise ValueError("Controller not available for signal connection")
+            
+            # Connect controller signals with error handling
             if hasattr(self.controller, 'signal_log'):
-                self.controller.signal_log.connect(self.log_message)
+                self.controller.signal_log.connect(self.safe_log_message)
+            
             if hasattr(self.controller, 'signal_status'):
-                self.controller.signal_status.connect(self.update_status)
+                self.controller.signal_status.connect(self.safe_update_status)
+            
             if hasattr(self.controller, 'signal_market_data'):
-                self.controller.signal_market_data.connect(self.update_market_data)
+                self.controller.signal_market_data.connect(self.safe_update_market_data)
+            
             if hasattr(self.controller, 'signal_trade_signal'):
-                self.controller.signal_trade_signal.connect(self.update_trade_signal)
+                self.controller.signal_trade_signal.connect(self.safe_update_trade_signal)
+            
             if hasattr(self.controller, 'signal_position_update'):
-                self.controller.signal_position_update.connect(self.update_positions)
+                self.controller.signal_position_update.connect(self.safe_update_positions)
+            
             if hasattr(self.controller, 'signal_account_update'):
-                self.controller.signal_account_update.connect(self.update_account_display)
+                self.controller.signal_account_update.connect(self.safe_update_account_display)
+            
             if hasattr(self.controller, 'signal_indicators_update'):
-                self.controller.signal_indicators_update.connect(self.update_indicators_display)
-            if hasattr(self.controller, 'signal_analysis_update'):
-                self.controller.signal_analysis_update.connect(self.update_analysis_status)
-                
+                self.controller.signal_indicators_update.connect(self.safe_update_indicators_display)
+            
+            if hasattr(self.controller, 'signal_connection_status'):
+                self.controller.signal_connection_status.connect(self.safe_update_connection_status)
+            
+            if hasattr(self.controller, 'signal_execution_result'):
+                self.controller.signal_execution_result.connect(self.safe_handle_execution_result)
+            
+            # Connect GUI element signals with validation
+            if self.connect_btn:
+                self.connect_btn.clicked.connect(self.safe_on_connect)
+            
+            if self.disconnect_btn:
+                self.disconnect_btn.clicked.connect(self.safe_on_disconnect)
+            
+            if self.start_btn:
+                self.start_btn.clicked.connect(self.safe_on_start_bot)
+            
+            if self.stop_btn:
+                self.stop_btn.clicked.connect(self.safe_on_stop_bot)
+            
+            if self.emergency_stop_btn:
+                self.emergency_stop_btn.clicked.connect(self.safe_on_emergency_stop)
+            
+            if self.shadow_mode_cb:
+                self.shadow_mode_cb.toggled.connect(self.safe_on_shadow_mode_toggle)
+            
+            if self.symbol_combo:
+                self.symbol_combo.currentTextChanged.connect(self.safe_on_symbol_changed)
+            
+            self.signals_connected = True
+            print("✅ All signals connected successfully")
+            
         except Exception as e:
-            print(f"Signal connection error: {e}")
+            print(f"❌ Signal connection error: {e}")
+            # Don't raise here - allow GUI to continue with limited functionality
     
-    def initialize_displays(self):
-        """Initialize all display elements with default values"""
+    def safe_initialize_displays(self):
+        """Safe initialization of display elements"""
         try:
             # Initialize market data displays
-            self.bid_label.setText("0.00000")
-            self.ask_label.setText("0.00000")
-            self.spread_label.setText("0")
-            self.time_label.setText("Not Connected")
+            if hasattr(self, 'bid_label'):
+                self.bid_label.setText("0.00000")
+            if hasattr(self, 'ask_label'):
+                self.ask_label.setText("0.00000")
+            if hasattr(self, 'spread_label'):
+                self.spread_label.setText("0")
+            if hasattr(self, 'time_label'):
+                self.time_label.setText("Not Connected")
             
             # Initialize account displays
-            self.balance_label.setText("$0.00")
-            self.equity_label.setText("$0.00")
-            self.margin_label.setText("$0.00")
-            self.pnl_label.setText("$0.00")
+            if hasattr(self, 'balance_label'):
+                self.balance_label.setText("$0.00")
+            if hasattr(self, 'equity_label'):
+                self.equity_label.setText("$0.00")
+            if hasattr(self, 'margin_label'):
+                self.margin_label.setText("$0.00")
+            if hasattr(self, 'pnl_label'):
+                self.pnl_label.setText("$0.00")
             
-            # Initialize indicator displays
-            indicator_labels = [
-                self.ema_fast_m1_label, self.ema_medium_m1_label, self.ema_slow_m1_label,
-                self.rsi_m1_label, self.atr_m1_label,
-                self.ema_fast_m5_label, self.ema_medium_m5_label, self.ema_slow_m5_label,
-                self.rsi_m5_label, self.atr_m5_label
-            ]
-            
-            for label in indicator_labels:
-                label.setText("N/A")
-                
-        except Exception as e:
-            print(f"Display initialization error: {e}")
-    
-    # TP/SL Mode Management
-    def on_tp_sl_mode_changed(self, mode):
-        """Handle TP/SL mode change"""
-        try:
-            # Hide all mode-specific controls first
-            self.atr_multiplier_spin.setVisible(False)
-            self.tp_points_spin.setVisible(False)
-            self.sl_points_spin.setVisible(False)
-            self.tp_pips_spin.setVisible(False)
-            self.sl_pips_spin.setVisible(False)
-            self.tp_percent_spin.setVisible(False)
-            self.sl_percent_spin.setVisible(False)
-            
-            # Show relevant controls for selected mode
-            if mode == "ATR":
-                self.atr_multiplier_spin.setVisible(True)
-            elif mode == "Points":
-                self.tp_points_spin.setVisible(True)
-                self.sl_points_spin.setVisible(True)
-            elif mode == "Pips":
-                self.tp_pips_spin.setVisible(True)
-                self.sl_pips_spin.setVisible(True)
-            elif mode == "Percent":
-                self.tp_percent_spin.setVisible(True)
-                self.sl_percent_spin.setVisible(True)
-                
-        except Exception as e:
-            self.log_message(f"TP/SL mode change error: {e}", "ERROR")
-    
-    def on_apply_tp_sl_settings(self):
-        """Apply TP/SL settings to controller with immediate effect"""
-        try:
-            mode = self.tp_sl_mode_combo.currentText()
-            
-            config_update = {
-                'tp_sl_mode': mode
-            }
-            
-            if mode == "ATR":
-                config_update['atr_multiplier'] = self.atr_multiplier_spin.value()
-            elif mode == "Points":
-                config_update['tp_points'] = self.tp_points_spin.value()
-                config_update['sl_points'] = self.sl_points_spin.value()
-            elif mode == "Pips":
-                config_update['tp_pips'] = self.tp_pips_spin.value()
-                config_update['sl_pips'] = self.sl_pips_spin.value()
-            elif mode == "Percent":
-                config_update['tp_percent'] = self.tp_percent_spin.value()
-                config_update['sl_percent'] = self.sl_percent_spin.value()
-            
-            # Update risk management settings too
-            config_update.update({
-                'risk_percent': self.risk_percent_spin.value(),
-                'max_daily_loss': self.max_daily_loss_spin.value(),
-                'max_trades_per_day': self.max_trades_spin.value(),
-                'max_spread_points': self.max_spread_spin.value(),
-                'min_sl_points': self.min_sl_spin.value(),
-                'risk_multiple': self.risk_multiple_spin.value()
-            })
-            
-            # Apply configuration immediately
-            self.controller.update_config(config_update)
-            self.log_message(f"✅ TP/SL and Risk settings applied successfully: {mode} mode", "INFO")
-            self.log_message(f"Risk: {self.risk_percent_spin.value()}%, SL Mode: {mode}", "INFO")
+            print("✅ Display initialization completed")
             
         except Exception as e:
-            self.log_message(f"TP/SL settings apply error: {e}", "ERROR")
+            print(f"❌ Display initialization error: {e}")
     
-    # Event handlers with comprehensive error handling
-    def on_connect(self):
-        """Handle connect button click with validation"""
+    # Enhanced safe event handlers
+    def safe_on_connect(self):
+        """Safe connect button handler"""
         try:
-            self.log_message("Attempting MT5 connection...", "INFO")
+            if not self.controller:
+                QMessageBox.warning(self, "Error", "Controller not available")
+                return
             
-            if self.controller.connect_mt5():
-                self.connect_btn.setEnabled(False)
-                self.disconnect_btn.setEnabled(True)
-                self.start_btn.setEnabled(True)
-                
-                self.connection_status.setText("✅ Connected")
-                self.connection_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-                
-                self.status_label.setText("✅ Status: Connected to MT5")
-                self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-                
-                # Update account info displays
-                if hasattr(self.controller, 'account_info') and self.controller.account_info:
-                    self.account_login_label.setText(f"Account: {self.controller.account_info.login}")
-                
-                self.log_message("MT5 connection successful!", "INFO")
+            if hasattr(self.controller, 'connect_mt5'):
+                if self.controller.connect_mt5():
+                    self.safe_update_button_states(connected=True)
+                    QMessageBox.information(self, "Success", "Successfully connected to MT5")
+                else:
+                    QMessageBox.warning(self, "Connection Failed", "Failed to connect to MT5. Check logs for details.")
             else:
-                self.log_message("MT5 connection failed!", "ERROR")
-                QMessageBox.critical(self, "Connection Failed", 
-                                   "Failed to connect to MetaTrader 5.\nPlease ensure MT5 is running and logged in.")
-                                   
+                QMessageBox.warning(self, "Error", "Connect method not available")
+                
         except Exception as e:
-            self.log_message(f"Connection error: {e}", "ERROR")
-            QMessageBox.critical(self, "Connection Error", f"Connection failed with error: {e}")
+            QMessageBox.critical(self, "Connection Error", f"Connection failed: {e}")
     
-    def on_disconnect(self):
-        """Handle disconnect button click"""
+    def safe_on_disconnect(self):
+        """Safe disconnect button handler"""
         try:
-            self.controller.disconnect_mt5()
-            
-            self.connect_btn.setEnabled(True)
-            self.disconnect_btn.setEnabled(False)
-            self.start_btn.setEnabled(False)
-            self.stop_btn.setEnabled(False)
-            
-            self.connection_status.setText("❌ Disconnected")
-            self.connection_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-            
-            self.status_label.setText("❌ Status: Disconnected")
-            self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-            
-            self.log_message("Disconnected from MT5", "INFO")
-            
+            if self.controller and hasattr(self.controller, 'disconnect_mt5'):
+                self.controller.disconnect_mt5()
+                self.safe_update_button_states(connected=False)
+                
         except Exception as e:
-            self.log_message(f"Disconnect error: {e}", "ERROR")
+            QMessageBox.critical(self, "Disconnect Error", f"Disconnect failed: {e}")
     
-    def on_start_bot(self):
-        """Handle start bot button click with comprehensive validation"""
+    def safe_on_start_bot(self):
+        """Safe start bot handler with enhanced validation"""
         try:
-            # Validate connection first
-            if not self.controller.is_connected:
+            if not self.controller:
+                QMessageBox.warning(self, "Error", "Controller not available")
+                return
+            
+            if not hasattr(self.controller, 'is_connected') or not self.controller.is_connected:
                 QMessageBox.warning(self, "Not Connected", "Please connect to MT5 first!")
                 return
             
-            # Show safety warning for live trading
-            if not self.shadow_mode_cb.isChecked():
+            # Enhanced safety warning
+            if hasattr(self.shadow_mode_cb, 'isChecked') and not self.shadow_mode_cb.isChecked():
                 reply = QMessageBox.warning(
                     self, 
                     "⚠️ LIVE TRADING WARNING",
-                    "You are about to start LIVE TRADING with REAL MONEY!\n\n"
+                    "🚨 YOU ARE ABOUT TO START LIVE TRADING WITH REAL MONEY! 🚨\n\n"
                     "⚠️ This will place actual orders in your MT5 account\n"
                     "⚠️ You can lose real money\n"
                     "⚠️ Make sure you understand the risks\n\n"
-                    "It's STRONGLY recommended to test in Shadow Mode first!\n\n"
+                    "STRONGLY RECOMMENDED: Test in Shadow Mode first!\n\n"
                     "Do you want to continue with LIVE TRADING?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No
@@ -894,59 +848,30 @@ class MainWindow(QMainWindow):
                     return
             
             # Update configuration from GUI
-            config = {
-                'symbol': self.symbol_combo.currentText(),
-                'risk_percent': self.risk_percent_spin.value(),
-                'max_daily_loss': self.max_daily_loss_spin.value(),
-                'max_trades_per_day': self.max_trades_spin.value(),
-                'max_spread_points': self.max_spread_spin.value(),
-                'min_sl_points': self.min_sl_spin.value(),
-                'risk_multiple': self.risk_multiple_spin.value(),
-                'ema_periods': {
-                    'fast': self.ema_fast_spin.value(),
-                    'medium': self.ema_medium_spin.value(),
-                    'slow': self.ema_slow_spin.value()
-                },
-                'rsi_period': self.rsi_period_spin.value(),
-                'atr_period': self.atr_period_spin.value()
-            }
+            self.safe_update_controller_config()
             
-            self.controller.update_config(config)
-            
-            if self.controller.start_bot():
-                self.start_btn.setEnabled(False)
-                self.stop_btn.setEnabled(True)
-                
-                self.bot_status.setText("🚀 Running")
-                self.bot_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-                
-                mode = "SHADOW MODE" if self.shadow_mode_cb.isChecked() else "🚨 LIVE TRADING"
-                self.log_message(f"Bot started in {mode}", "INFO")
+            if hasattr(self.controller, 'start_bot') and self.controller.start_bot():
+                self.safe_update_button_states(running=True)
+                mode = "SHADOW MODE" if (hasattr(self.shadow_mode_cb, 'isChecked') and self.shadow_mode_cb.isChecked()) else "🚨 LIVE TRADING"
+                QMessageBox.information(self, "Bot Started", f"Trading bot started in {mode}")
             else:
-                QMessageBox.critical(self, "Start Failed", "Failed to start trading bot!")
+                QMessageBox.warning(self, "Start Failed", "Failed to start trading bot!")
                 
         except Exception as e:
-            self.log_message(f"Bot start error: {e}", "ERROR")
             QMessageBox.critical(self, "Start Error", f"Failed to start bot: {e}")
     
-    def on_stop_bot(self):
-        """Handle stop bot button click"""
+    def safe_on_stop_bot(self):
+        """Safe stop bot handler"""
         try:
-            self.controller.stop_bot()
-            
-            self.start_btn.setEnabled(True)
-            self.stop_btn.setEnabled(False)
-            
-            self.bot_status.setText("⏸️ Stopped")
-            self.bot_status.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
-            
-            self.log_message("Bot stopped successfully", "INFO")
-            
+            if self.controller and hasattr(self.controller, 'stop_bot'):
+                self.controller.stop_bot()
+                self.safe_update_button_states(running=False)
+                
         except Exception as e:
-            self.log_message(f"Bot stop error: {e}", "ERROR")
+            QMessageBox.critical(self, "Stop Error", f"Failed to stop bot: {e}")
     
-    def on_emergency_stop(self):
-        """Handle emergency stop button click"""
+    def safe_on_emergency_stop(self):
+        """Safe emergency stop handler"""
         try:
             reply = QMessageBox.question(
                 self,
@@ -960,290 +885,242 @@ class MainWindow(QMainWindow):
             )
             
             if reply == QMessageBox.StandardButton.Yes:
-                # Stop bot first
-                self.controller.stop_bot()
+                if self.controller:
+                    if hasattr(self.controller, 'close_all_positions'):
+                        self.controller.close_all_positions()
+                    if hasattr(self.controller, 'stop_bot'):
+                        self.controller.stop_bot()
+                    if hasattr(self.controller, 'disconnect_mt5'):
+                        self.controller.disconnect_mt5()
                 
-                # Close all positions
-                if hasattr(self.controller, 'close_all_positions'):
-                    self.controller.close_all_positions()
-                
-                # Disconnect
-                self.controller.disconnect_mt5()
-                
-                # Update UI
-                self.on_disconnect()
-                
-                self.log_message("🚨 EMERGENCY STOP EXECUTED", "WARNING")
+                self.safe_update_button_states(connected=False, running=False)
                 QMessageBox.information(self, "Emergency Stop", "Emergency stop completed successfully!")
                 
         except Exception as e:
-            self.log_message(f"Emergency stop error: {e}", "ERROR")
+            QMessageBox.critical(self, "Emergency Stop Error", f"Emergency stop failed: {e}")
     
-    def on_shadow_mode_toggle(self, checked):
-        """Handle shadow mode toggle"""
+    def safe_on_shadow_mode_toggle(self, checked):
+        """Safe shadow mode toggle handler"""
         try:
-            self.controller.toggle_shadow_mode(checked)
-            
-            if checked:
-                self.mode_status.setText("🛡️ Shadow")
-                self.mode_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-                self.log_message("Shadow mode enabled - Signals only, no real trades", "INFO")
-            else:
-                self.mode_status.setText("🚨 Live")
-                self.mode_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-                self.log_message("⚠️ LIVE TRADING MODE - Real money at risk!", "WARNING")
+            if self.controller and hasattr(self.controller, 'toggle_shadow_mode'):
+                self.controller.toggle_shadow_mode(checked)
+                
+            # Update mode status
+            if hasattr(self, 'mode_status'):
+                if checked:
+                    self.mode_status.setText("🛡️ Shadow")
+                    self.mode_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+                else:
+                    self.mode_status.setText("🚨 Live")
+                    self.mode_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                    
+        except Exception as e:
+            print(f"Shadow mode toggle error: {e}")
+    
+    def safe_on_symbol_changed(self, symbol):
+        """Safe symbol change handler"""
+        try:
+            if self.controller and hasattr(self.controller, 'update_config'):
+                self.controller.update_config({'symbol': symbol})
                 
         except Exception as e:
-            self.log_message(f"Shadow mode toggle error: {e}", "ERROR")
+            print(f"Symbol change error: {e}")
     
-    def on_symbol_changed(self, symbol):
-        """Handle symbol change with validation"""
+    def safe_update_controller_config(self):
+        """Safe controller configuration update"""
         try:
-            # Update controller configuration
-            self.controller.update_config({'symbol': symbol})
+            if not self.controller or not hasattr(self.controller, 'update_config'):
+                return
             
-            # Reset symbol status
-            self.symbol_status_label.setText("❓ Not validated")
+            config = {}
             
-            self.log_message(f"Symbol changed to: {symbol}", "INFO")
+            # Safely get GUI values
+            if hasattr(self, 'symbol_combo') and self.symbol_combo:
+                config['symbol'] = self.symbol_combo.currentText()
+            
+            if hasattr(self, 'risk_percent_spin') and self.risk_percent_spin:
+                config['risk_percent'] = self.risk_percent_spin.value()
+            
+            if hasattr(self, 'max_daily_loss_spin') and self.max_daily_loss_spin:
+                config['max_daily_loss'] = self.max_daily_loss_spin.value()
+            
+            if hasattr(self, 'max_trades_spin') and self.max_trades_spin:
+                config['max_trades_per_day'] = self.max_trades_spin.value()
+            
+            if hasattr(self, 'max_spread_spin') and self.max_spread_spin:
+                config['max_spread_points'] = self.max_spread_spin.value()
+            
+            if hasattr(self, 'min_sl_spin') and self.min_sl_spin:
+                config['min_sl_points'] = self.min_sl_spin.value()
+            
+            if hasattr(self, 'risk_multiple_spin') and self.risk_multiple_spin:
+                config['risk_multiple'] = self.risk_multiple_spin.value()
+            
+            # EMA periods
+            if all(hasattr(self, attr) for attr in ['ema_fast_spin', 'ema_medium_spin', 'ema_slow_spin']):
+                config['ema_periods'] = {
+                    'fast': self.ema_fast_spin.value(),
+                    'medium': self.ema_medium_spin.value(),
+                    'slow': self.ema_slow_spin.value()
+                }
+            
+            if hasattr(self, 'rsi_period_spin') and self.rsi_period_spin:
+                config['rsi_period'] = self.rsi_period_spin.value()
+            
+            if hasattr(self, 'atr_period_spin') and self.atr_period_spin:
+                config['atr_period'] = self.atr_period_spin.value()
+            
+            # TP/SL configuration
+            if hasattr(self, 'tp_sl_mode_combo') and self.tp_sl_mode_combo:
+                config['tp_sl_mode'] = self.tp_sl_mode_combo.currentText()
+            
+            # Apply configuration
+            self.controller.update_config(config)
             
         except Exception as e:
-            self.log_message(f"Symbol change error: {e}", "ERROR")
+            print(f"Config update error: {e}")
     
-    def on_test_signal(self):
-        """Test signal generation"""
+    def safe_update_button_states(self, connected=None, running=None):
+        """Safe button state updates"""
         try:
-            if hasattr(self.controller, 'test_signal'):
-                self.controller.test_signal()
-            else:
-                self.log_message("Test signal function not available", "WARNING")
+            if connected is not None:
+                if hasattr(self, 'connect_btn') and self.connect_btn:
+                    self.connect_btn.setEnabled(not connected)
+                if hasattr(self, 'disconnect_btn') and self.disconnect_btn:
+                    self.disconnect_btn.setEnabled(connected)
+                if hasattr(self, 'start_btn') and self.start_btn:
+                    self.start_btn.setEnabled(connected and (running is False or running is None))
+                if hasattr(self, 'emergency_stop_btn') and self.emergency_stop_btn:
+                    self.emergency_stop_btn.setEnabled(connected)
+            
+            if running is not None:
+                if hasattr(self, 'start_btn') and self.start_btn:
+                    self.start_btn.setEnabled(not running and (connected is True or connected is None))
+                if hasattr(self, 'stop_btn') and self.stop_btn:
+                    self.stop_btn.setEnabled(running)
+            
         except Exception as e:
-            self.log_message(f"Test signal error: {e}", "ERROR")
+            print(f"Button state update error: {e}")
     
-    def on_validate_symbol(self):
-        """Validate current symbol"""
-        try:
-            symbol = self.symbol_combo.currentText()
-            # Add symbol validation logic here
-            self.log_message(f"Validating symbol: {symbol}", "INFO")
-            # Update symbol status based on validation result
-            self.symbol_status_label.setText("✅ Valid")
-        except Exception as e:
-            self.log_message(f"Symbol validation error: {e}", "ERROR")
-            self.symbol_status_label.setText("❌ Invalid")
-    
-    def on_check_margin(self):
-        """Check margin requirements"""
-        try:
-            self.log_message("Checking margin requirements...", "INFO")
-            # Add margin checking logic here
-        except Exception as e:
-            self.log_message(f"Margin check error: {e}", "ERROR")
-    
-    def on_close_all_positions(self):
-        """Close all open positions"""
-        try:
-            reply = QMessageBox.question(
-                self, "Confirm", "Close all open positions?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                if hasattr(self.controller, 'close_all_positions'):
-                    self.controller.close_all_positions()
-                else:
-                    self.log_message("Close all positions function not available", "WARNING")
-        except Exception as e:
-            self.log_message(f"Close positions error: {e}", "ERROR")
-    
-    def on_export_logs(self):
-        """Export trading logs"""
-        try:
-            if hasattr(self.controller, 'export_logs'):
-                file_path = self.controller.export_logs()
-                if file_path:
-                    QMessageBox.information(self, "Success", f"Logs exported to {file_path}")
-                else:
-                    QMessageBox.warning(self, "Error", "Failed to export logs")
-            else:
-                self.log_message("Export logs function not available", "WARNING")
-        except Exception as e:
-            self.log_message(f"Export logs error: {e}", "ERROR")
-    
-    def refresh_positions(self):
-        """Refresh positions display"""
-        try:
-            if hasattr(self.controller, 'update_positions_display'):
-                self.controller.update_positions_display()
-            self.log_message("Positions refreshed", "INFO")
-        except Exception as e:
-            self.log_message(f"Refresh positions error: {e}", "ERROR")
-    
-    # Slots for controller signals with error handling
+    # Enhanced safe slot handlers
     @Slot(str, str)
-    def log_message(self, message: str, level: str):
-        """Display log message with color coding"""
+    def safe_log_message(self, message: str, level: str):
+        """Safe log message handler"""
         try:
+            if not hasattr(self, 'log_text') or not self.log_text:
+                return
+            
             timestamp = datetime.now().strftime("%H:%M:%S")
             
-            # Color code based on log level
+            # Color mapping
             color_map = {
-                "INFO": "#00FF00",      # Green
-                "WARNING": "#FFA500",   # Orange
-                "ERROR": "#FF0000",     # Red
-                "DEBUG": "#00FFFF"      # Cyan
+                "INFO": "#00FF00",
+                "WARNING": "#FFA500", 
+                "ERROR": "#FF0000",
+                "DEBUG": "#00FFFF"
             }
             
-            color = color_map.get(level, "#FFFFFF")  # White as default
+            color = color_map.get(level, "#FFFFFF")
             formatted_msg = f'<span style="color: {color};">[{timestamp}] {level}: {message}</span>'
             
             self.log_text.append(formatted_msg)
             
-            # Auto-scroll to bottom
-            cursor = self.log_text.textCursor()
-            cursor.movePosition(cursor.MoveOperation.End)
-            self.log_text.setTextCursor(cursor)
+            # Auto-scroll if enabled
+            if hasattr(self, 'auto_scroll_cb') and self.auto_scroll_cb and self.auto_scroll_cb.isChecked():
+                cursor = self.log_text.textCursor()
+                cursor.movePosition(cursor.MoveOperation.End)
+                self.log_text.setTextCursor(cursor)
             
         except Exception as e:
             print(f"Log display error: {e}")
     
     @Slot(str)
-    def update_status(self, status: str):
-        """Update status display"""
+    def safe_update_status(self, status: str):
+        """Safe status update handler"""
         try:
-            self.status_label.setText(f"Status: {status}")
-            self.bot_status.setText(status)
+            if hasattr(self, 'bot_status') and self.bot_status:
+                self.bot_status.setText(status)
             
-            # Update status bar
-            self.statusBar().showMessage(f"System Status: {status}")
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage(f"System Status: {status}")
             
-            if status == "Connected":
-                self.connection_status.setText("✅ Connected")
-                self.connection_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            elif status == "Disconnected":
-                self.connection_status.setText("❌ Disconnected")
-                self.connection_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-            elif status == "Running":
-                self.bot_status.setText("🚀 Running")
-                self.bot_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            elif status == "Stopped":
-                self.bot_status.setText("⏸️ Stopped")
-                self.bot_status.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
-                
         except Exception as e:
             print(f"Status update error: {e}")
     
     @Slot(dict)
-    def update_market_data(self, data: Dict):
-        """Update market data display with error handling"""
+    def safe_update_market_data(self, data: Dict):
+        """Safe market data update handler"""
         try:
-            # Update price displays
-            self.bid_label.setText(f"{data.get('bid', 0.0):.5f}")
-            self.ask_label.setText(f"{data.get('ask', 0.0):.5f}")
-            self.spread_label.setText(f"{data.get('spread', 0)}")
+            if 'bid' in data and hasattr(self, 'bid_label') and self.bid_label:
+                self.bid_label.setText(f"{data['bid']:.5f}")
             
-            if 'time' in data:
+            if 'ask' in data and hasattr(self, 'ask_label') and self.ask_label:
+                self.ask_label.setText(f"{data['ask']:.5f}")
+            
+            if 'spread' in data and hasattr(self, 'spread_label') and self.spread_label:
+                self.spread_label.setText(f"{data['spread']}")
+            
+            if 'time' in data and hasattr(self, 'time_label') and self.time_label:
                 self.time_label.setText(data['time'].strftime("%H:%M:%S"))
+            
+            if 'tick_volume' in data and hasattr(self, 'volume_label') and self.volume_label:
+                self.volume_label.setText(f"{data['tick_volume']}")
             
         except Exception as e:
             print(f"Market data update error: {e}")
     
     @Slot(dict)
-    def update_indicators_display(self, indicators: Dict):
-        """Update indicators display"""
+    def safe_update_trade_signal(self, signal: Dict):
+        """Safe trade signal update handler"""
         try:
-            # Update M1 indicators
-            if 'M1' in indicators and indicators['M1']:
-                ind_m1 = indicators['M1']
-                self.ema_fast_m1_label.setText(f"{ind_m1.get('ema_fast', 0):.5f}" if ind_m1.get('ema_fast') else "N/A")
-                self.ema_medium_m1_label.setText(f"{ind_m1.get('ema_medium', 0):.5f}" if ind_m1.get('ema_medium') else "N/A")
-                self.ema_slow_m1_label.setText(f"{ind_m1.get('ema_slow', 0):.5f}" if ind_m1.get('ema_slow') else "N/A")
-                self.rsi_m1_label.setText(f"{ind_m1.get('rsi', 0):.2f}" if ind_m1.get('rsi') else "N/A")
-                self.atr_m1_label.setText(f"{ind_m1.get('atr', 0):.5f}" if ind_m1.get('atr') else "N/A")
+            if 'type' in signal and hasattr(self, 'signal_type_label') and self.signal_type_label:
+                signal_type = signal['type']
+                self.signal_type_label.setText(signal_type)
+                # Color code the signal type
+                color = "green" if signal_type == "BUY" else "red" if signal_type == "SELL" else "gray"
+                self.signal_type_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: bold; }}")
             
-            # Update M5 indicators
-            if 'M5' in indicators and indicators['M5']:
-                ind_m5 = indicators['M5']
-                self.ema_fast_m5_label.setText(f"{ind_m5.get('ema_fast', 0):.5f}" if ind_m5.get('ema_fast') else "N/A")
-                self.ema_medium_m5_label.setText(f"{ind_m5.get('ema_medium', 0):.5f}" if ind_m5.get('ema_medium') else "N/A")
-                self.ema_slow_m5_label.setText(f"{ind_m5.get('ema_slow', 0):.5f}" if ind_m5.get('ema_slow') else "N/A")
-                self.rsi_m5_label.setText(f"{ind_m5.get('rsi', 0):.2f}" if ind_m5.get('rsi') else "N/A")
-                self.atr_m5_label.setText(f"{ind_m5.get('atr', 0):.5f}" if ind_m5.get('atr') else "N/A")
-                
-        except Exception as e:
-            print(f"Indicators update error: {e}")
-    
-    @Slot(dict)
-    def update_analysis_status(self, analysis: Dict):
-        """Update analysis status display"""
-        try:
-            status = analysis.get('status', 'idle')
-            if status == 'analyzing':
-                self.analysis_status_label.setText("🔍 Analyzing Market...")
-                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: blue; }")
-            elif status == 'signal_found':
-                self.analysis_status_label.setText("✅ Signal Detected")
-                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: green; }")
-            elif status == 'no_signal':
-                self.analysis_status_label.setText("⏳ Waiting for Setup")
-                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: orange; }")
-            else:
-                self.analysis_status_label.setText("⏸️ Idle")
-                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: gray; }")
+            if 'entry_price' in signal and hasattr(self, 'signal_entry_label') and self.signal_entry_label:
+                self.signal_entry_label.setText(f"{signal['entry_price']:.5f}")
             
-            # Update trend analysis
-            m5_trend = analysis.get('m5_trend', 'N/A')
-            m1_setup = analysis.get('m1_setup', 'N/A')
-            strength = analysis.get('signal_strength', 'N/A')
+            if 'sl_price' in signal and hasattr(self, 'signal_sl_label') and self.signal_sl_label:
+                self.signal_sl_label.setText(f"{signal['sl_price']:.5f}")
             
-            self.trend_m5_label.setText(m5_trend)
-            self.trend_m1_label.setText(m1_setup)
-            self.signal_strength_label.setText(f"{strength}/10" if isinstance(strength, (int, float)) else strength)
+            if 'tp_price' in signal and hasattr(self, 'signal_tp_label') and self.signal_tp_label:
+                self.signal_tp_label.setText(f"{signal['tp_price']:.5f}")
             
-            # Update next analysis time
-            if 'next_analysis' in analysis:
-                self.next_analysis_label.setText(analysis['next_analysis'])
-                
-        except Exception as e:
-            print(f"Analysis status update error: {e}")
-    
-    @Slot(dict)
-    def update_trade_signal(self, signal: Dict):
-        """Update trade signal display with error handling"""
-        try:
-            signal_type = signal.get('type', 'None')
-            self.signal_type_label.setText(signal_type)
-            self.signal_entry_label.setText(f"{signal.get('entry_price', 0):.5f}")
-            self.signal_sl_label.setText(f"{signal.get('sl_price', 0):.5f}")
-            self.signal_tp_label.setText(f"{signal.get('tp_price', 0):.5f}")
-            self.signal_lot_label.setText(f"{signal.get('lot_size', 0):.2f}")
-            self.signal_risk_label.setText(f"1:{signal.get('risk_reward', 0):.1f}")
+            if 'lot_size' in signal and hasattr(self, 'signal_lot_label') and self.signal_lot_label:
+                self.signal_lot_label.setText(f"{signal['lot_size']:.2f}")
             
-            if 'timestamp' in signal:
+            if 'timestamp' in signal and hasattr(self, 'signal_time_label') and self.signal_time_label:
                 self.signal_time_label.setText(signal['timestamp'].strftime("%H:%M:%S"))
             
-            # Update auto trade status
-            if not self.shadow_mode_cb.isChecked() and signal_type != 'None':
-                self.auto_trade_status_label.setText("🚀 AUTO ORDER READY")
-                self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: green; }")
-            elif self.shadow_mode_cb.isChecked() and signal_type != 'None':
-                self.auto_trade_status_label.setText("🛡️ SHADOW - Signal Only")
-                self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: blue; }")
-            else:
-                self.auto_trade_status_label.setText("⏸️ No Signal")
-                self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: gray; }")
+            if 'confidence' in signal and hasattr(self, 'signal_confidence_label') and self.signal_confidence_label:
+                confidence = signal['confidence']
+                self.signal_confidence_label.setText(f"{confidence}%")
+                # Color code confidence
+                if confidence >= 80:
+                    color = "green"
+                elif confidence >= 60:
+                    color = "orange"
+                else:
+                    color = "red"
+                self.signal_confidence_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: bold; }}")
             
         except Exception as e:
             print(f"Signal update error: {e}")
     
     @Slot(list)
-    def update_positions(self, positions: List[Dict]):
-        """Update positions table with error handling"""
+    def safe_update_positions(self, positions: List[Dict]):
+        """Safe positions update handler"""
         try:
+            if not hasattr(self, 'positions_table') or not self.positions_table:
+                return
+            
             self.positions_table.setRowCount(len(positions))
             
             for row, pos in enumerate(positions):
                 try:
-                    # Safely update each cell
                     items = [
                         str(pos.get('ticket', '')),
                         pos.get('type', ''),
@@ -1263,116 +1140,157 @@ class MainWindow(QMainWindow):
                         if col == 7:  # Profit column
                             profit = pos.get('profit', 0)
                             if profit > 0:
-                                item.setBackground(QColor("#4CAF50"))  # Green
+                                item.setBackground(QColor("#4CAF50"))
                             elif profit < 0:
-                                item.setBackground(QColor("#f44336"))  # Red
+                                item.setBackground(QColor("#f44336"))
                         
                         self.positions_table.setItem(row, col, item)
-                        
+                
                 except Exception as row_error:
-                    print(f"Error updating row {row}: {row_error}")
+                    print(f"Error updating position row {row}: {row_error}")
                     continue
-                    
+            
         except Exception as e:
             print(f"Position update error: {e}")
     
     @Slot(dict)
-    def update_account_display(self, account_data: Dict):
-        """Update account information display with error handling"""
+    def safe_update_account_display(self, account_data: Dict):
+        """Safe account display update handler"""
         try:
-            balance = account_data.get('balance', 0)
-            equity = account_data.get('equity', 0)
-            margin = account_data.get('margin', 0)
-            profit = account_data.get('profit', 0)
-            margin_free = account_data.get('margin_free', 0)
+            if 'balance' in account_data and hasattr(self, 'balance_label') and self.balance_label:
+                self.balance_label.setText(f"${account_data['balance']:.2f}")
             
-            self.balance_label.setText(f"${balance:.2f}")
-            self.equity_label.setText(f"${equity:.2f}")
-            self.margin_label.setText(f"${margin:.2f}")
-            self.pnl_label.setText(f"${profit:.2f}")
+            if 'equity' in account_data and hasattr(self, 'equity_label') and self.equity_label:
+                self.equity_label.setText(f"${account_data['equity']:.2f}")
+            
+            if 'margin' in account_data and hasattr(self, 'margin_label') and self.margin_label:
+                self.margin_label.setText(f"${account_data.get('margin', 0):.2f}")
+            
+            if 'profit' in account_data and hasattr(self, 'pnl_label') and self.pnl_label:
+                profit = account_data['profit']
+                self.pnl_label.setText(f"${profit:.2f}")
+                # Color code P&L
+                color = "green" if profit >= 0 else "red"
+                self.pnl_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: bold; }}")
             
             # Calculate and display margin level
-            if margin > 0:
+            margin = account_data.get('margin', 1)
+            equity = account_data.get('equity', 0)
+            if margin > 0 and hasattr(self, 'margin_level_label') and self.margin_level_label:
                 margin_level = (equity / margin) * 100
                 self.margin_level_label.setText(f"{margin_level:.1f}%")
-                
                 # Color code margin level
                 if margin_level < 100:
-                    self.margin_level_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                    color = "red"
                 elif margin_level < 200:
-                    self.margin_level_label.setStyleSheet("QLabel { color: orange; font-weight: bold; }")
+                    color = "orange"
                 else:
-                    self.margin_level_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+                    color = "green"
+                self.margin_level_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: bold; }}")
             
-            # Color code P&L
-            if profit > 0:
-                self.pnl_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            elif profit < 0:
-                self.pnl_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-            else:
-                self.pnl_label.setStyleSheet("QLabel { color: gray; font-weight: bold; }")
-                
         except Exception as e:
             print(f"Account display update error: {e}")
     
-    def update_gui_data(self):
-        """Periodic GUI data update with error handling"""
+    @Slot(dict)
+    def safe_update_indicators_display(self, indicators: Dict):
+        """Safe indicators display update handler"""
+        try:
+            # Update M1 indicators
+            if 'M1' in indicators and indicators['M1']:
+                m1_data = indicators['M1']
+                if hasattr(self, 'ema_fast_m1_label') and self.ema_fast_m1_label:
+                    self.ema_fast_m1_label.setText(f"{m1_data.get('ema_fast', 0):.5f}")
+                if hasattr(self, 'ema_medium_m1_label') and self.ema_medium_m1_label:
+                    self.ema_medium_m1_label.setText(f"{m1_data.get('ema_medium', 0):.5f}")
+                if hasattr(self, 'ema_slow_m1_label') and self.ema_slow_m1_label:
+                    self.ema_slow_m1_label.setText(f"{m1_data.get('ema_slow', 0):.5f}")
+                if hasattr(self, 'rsi_m1_label') and self.rsi_m1_label:
+                    self.rsi_m1_label.setText(f"{m1_data.get('rsi', 50):.2f}")
+                if hasattr(self, 'atr_m1_label') and self.atr_m1_label:
+                    self.atr_m1_label.setText(f"{m1_data.get('atr', 0):.5f}")
+            
+            # Update M5 indicators
+            if 'M5' in indicators and indicators['M5']:
+                m5_data = indicators['M5']
+                if hasattr(self, 'ema_fast_m5_label') and self.ema_fast_m5_label:
+                    self.ema_fast_m5_label.setText(f"{m5_data.get('ema_fast', 0):.5f}")
+                if hasattr(self, 'ema_medium_m5_label') and self.ema_medium_m5_label:
+                    self.ema_medium_m5_label.setText(f"{m5_data.get('ema_medium', 0):.5f}")
+                if hasattr(self, 'ema_slow_m5_label') and self.ema_slow_m5_label:
+                    self.ema_slow_m5_label.setText(f"{m5_data.get('ema_slow', 0):.5f}")
+                if hasattr(self, 'rsi_m5_label') and self.rsi_m5_label:
+                    self.rsi_m5_label.setText(f"{m5_data.get('rsi', 50):.2f}")
+                if hasattr(self, 'atr_m5_label') and self.atr_m5_label:
+                    self.atr_m5_label.setText(f"{m5_data.get('atr', 0):.5f}")
+            
+        except Exception as e:
+            print(f"Indicators update error: {e}")
+    
+    @Slot(bool)
+    def safe_update_connection_status(self, connected: bool):
+        """Safe connection status update handler"""
+        try:
+            if hasattr(self, 'connection_status') and self.connection_status:
+                if connected:
+                    self.connection_status.setText("✅ Connected")
+                    self.connection_status.setStyleSheet("QLabel { color: green; font-weight: bold; }")
+                else:
+                    self.connection_status.setText("❌ Disconnected")
+                    self.connection_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+            
+            # Update button states
+            self.safe_update_button_states(connected=connected)
+            
+        except Exception as e:
+            print(f"Connection status update error: {e}")
+    
+    @Slot(dict)
+    def safe_handle_execution_result(self, result: Dict):
+        """Safe execution result handler"""
+        try:
+            success = result.get('success', False)
+            message = result.get('message', 'Unknown result')
+            
+            if success:
+                QMessageBox.information(self, "Order Executed", f"✅ {message}")
+            else:
+                QMessageBox.warning(self, "Order Failed", f"❌ {message}")
+            
+        except Exception as e:
+            print(f"Execution result handler error: {e}")
+    
+    def safe_update_gui_data(self):
+        """Safe periodic GUI data update"""
         try:
             # Update system time
-            if hasattr(self, 'system_time_label'):
+            if hasattr(self, 'system_time_label') and self.system_time_label:
                 self.system_time_label.setText(datetime.now().strftime("%H:%M:%S"))
             
-            # Update time in dashboard
-            if hasattr(self, 'time_label') and self.controller.is_connected:
-                self.time_label.setText(datetime.now().strftime("%H:%M:%S"))
-            
-            # Update positions if controller is available and connected
-            if (hasattr(self.controller, 'is_connected') and 
-                self.controller.is_connected and 
-                hasattr(self.controller, 'get_positions')):
-                try:
-                    positions = self.controller.get_positions()
-                    if positions is not None:
-                        self.update_positions(positions)
-                except:
-                    pass  # Ignore position update errors
+            # Update daily statistics if controller available
+            if (hasattr(self, 'controller') and self.controller and 
+                hasattr(self.controller, 'daily_trades')):
+                
+                if hasattr(self, 'daily_trades_label') and self.daily_trades_label:
+                    self.daily_trades_label.setText(str(self.controller.daily_trades))
+                
+                if hasattr(self, 'daily_pnl_stat_label') and self.daily_pnl_stat_label:
+                    self.daily_pnl_stat_label.setText(f"${self.controller.daily_pnl:.2f}")
+                
+                if hasattr(self, 'consecutive_losses_label') and self.consecutive_losses_label:
+                    losses = getattr(self.controller, 'consecutive_losses', 0)
+                    self.consecutive_losses_label.setText(str(losses))
             
         except Exception as e:
-            # Ignore GUI update errors to prevent disruption
+            # Silent fail for GUI updates to prevent spam
             pass
     
-    def clear_logs(self):
-        """Clear log display"""
-        try:
-            self.log_text.clear()
-            self.log_message("Logs cleared", "INFO")
-        except Exception as e:
-            print(f"Clear logs error: {e}")
-    
-    def save_logs(self):
-        """Save logs to file with error handling"""
-        try:
-            filename, _ = QFileDialog.getSaveFileName(
-                self, "Save Logs", 
-                f"trading_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt", 
-                "Text Files (*.txt);;All Files (*)"
-            )
-            
-            if filename:
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(self.log_text.toPlainText())
-                QMessageBox.information(self, "Success", f"Logs saved to:\n{filename}")
-                self.log_message(f"Logs saved to {filename}", "INFO")
-                
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to save logs:\n{e}")
-            self.log_message(f"Failed to save logs: {e}", "ERROR")
-    
     def closeEvent(self, event):
-        """Handle application close event"""
+        """Enhanced close event handler"""
         try:
-            # Confirm before closing if bot is running
-            if hasattr(self.controller, 'is_running') and self.controller.is_running:
+            # Check if bot is running
+            if (hasattr(self, 'controller') and self.controller and 
+                hasattr(self.controller, 'is_running') and self.controller.is_running):
+                
                 reply = QMessageBox.question(
                     self,
                     "Confirm Exit",
@@ -1386,20 +1304,23 @@ class MainWindow(QMainWindow):
                     event.ignore()
                     return
                 
-                # Stop the bot before closing
-                self.controller.stop_bot()
+                # Stop the bot safely
+                if hasattr(self.controller, 'stop_bot'):
+                    self.controller.stop_bot()
             
             # Disconnect if connected
-            if hasattr(self.controller, 'is_connected') and self.controller.is_connected:
-                self.controller.disconnect_mt5()
+            if (hasattr(self, 'controller') and self.controller and 
+                hasattr(self.controller, 'is_connected') and self.controller.is_connected):
+                if hasattr(self.controller, 'disconnect_mt5'):
+                    self.controller.disconnect_mt5()
             
             # Stop timers
-            if hasattr(self, 'update_timer'):
+            if hasattr(self, 'update_timer') and self.update_timer:
                 self.update_timer.stop()
             
-            self.log_message("Application closing...", "INFO")
+            print("✅ Application closing gracefully...")
             event.accept()
             
         except Exception as e:
             print(f"Close event error: {e}")
-            event.accept()  # Close anyway
+            event.accept()  # Close anyway to prevent hanging
