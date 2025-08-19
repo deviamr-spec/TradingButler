@@ -154,6 +154,8 @@ def main():
         # Create FIXED main window dengan TP/SL input dinamis
         main_window = MainWindow(controller)
         main_window.show()
+        main_window.raise_()  # Bring window to front
+        main_window.activateWindow()  # Activate window
 
         logger.info("🚀 REAL MONEY TRADING BOT INITIALIZED SUCCESSFULLY!")
         logger.info("💰 LIVE TRADING FEATURES ACTIVE:")

@@ -501,7 +501,7 @@ class BotController(QObject):
                 self.log_message("⚠️ MetaTrader5 module not found!", "WARNING")
                 self.log_message("📦 Install command: pip install MetaTrader5", "INFO")
                 self.log_message("🔄 Switching to DEMO mode for testing...", "INFO")
-                
+
                 # Set demo mode and proceed
                 self.mt5_available = False
                 self.is_connected = True  # Allow demo connection
@@ -512,12 +512,12 @@ class BotController(QObject):
                     'margin': 0.0,
                     'profit': 0.0
                 }
-                
+
                 # Setup demo analysis worker
                 self.setup_analysis_worker()
                 if self.analysis_worker is not None:
                     self.analysis_worker.start()
-                    
+
                 self.log_message("✅ DEMO MODE CONNECTED - Testing environment ready", "INFO")
                 return True
 
@@ -526,7 +526,7 @@ class BotController(QObject):
 
             # 1. Check if MT5 terminal is running
             self.log_message("🔍 Checking MT5 terminal status...", "INFO")
-            
+
             # Multiple initialization strategies
             mt5_initialized = False
             last_error = None
@@ -574,7 +574,7 @@ class BotController(QObject):
                     mt5.shutdown()
                     import time
                     time.sleep(1)
-                    
+
                     if mt5.initialize():
                         mt5_initialized = True
                         self.log_message("✅ MT5 connected after reset!", "INFO")
@@ -1386,3 +1386,85 @@ class BotController(QObject):
         elif mode == 'Balance%':
             self.config['tp_percent'] = tp_value if tp_value else 1.0
             self.config['sl_percent'] = sl_value if sl_value else 0.5
+
+    def log_symbol_info(self):
+        """Log symbol information"""
+        try:
+            if not self.symbol_info:
+                return
+
+            self.log_message(f"Symbol: {self.symbol_info.name}", "INFO")
+            self.log_message(f"Point: {self.symbol_info.point}", "INFO")
+            self.log_message(f"Digits: {self.symbol_info.digits}", "INFO")
+            self.log_message(f"Min Volume: {self.symbol_info.volume_min}", "INFO")
+            self.log_message(f"Max Volume: {self.symbol_info.volume_max}", "INFO")
+            self.log_message(f"Volume Step: {self.symbol_info.volume_step}", "INFO")
+
+        except Exception as e:
+            self.log_message(f"Symbol info logging error: {e}", "ERROR")
+
+    def execute_manual_trade(self, side, lot_size):
+        """Execute REAL manual trade order via MT5"""
+        try:
+            if not self.is_connected or not MT5_AVAILABLE:
+                return {'success': False, 'error': 'MT5 not connected - Real trading required'}
+
+            symbol = self.config['symbol']
+
+            # Get current tick
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                return {'success': False, 'error': 'Cannot get current price'}
+
+            # Determine order type and price
+            if side == "BUY":
+                order_type = mt5.ORDER_TYPE_BUY
+                price = tick.ask
+            else:
+                order_type = mt5.ORDER_TYPE_SELL
+                price = tick.bid
+
+            # Manual trades without automatic SL/TP
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": lot_size,
+                "type": order_type,
+                "price": price,
+                "deviation": self.config.get('deviation', 10),
+                "magic": self.config.get('magic_number', 234567),
+                "comment": f"MANUAL_{side}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+
+            # Execute REAL manual order
+            result = mt5.order_send(request)
+
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                # Try FOK
+                request["type_filling"] = mt5.ORDER_FILLING_FOK
+                result = mt5.order_send(request)
+
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.log_message(f"✅ MANUAL {side} EXECUTED: {lot_size} lots @ {price:.5f}", "INFO")
+                self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
+                self.daily_trades += 1
+                return {
+                    'success': True, 
+                    'ticket': result.order, 
+                    'price': result.price,
+                    'deal': result.deal
+                }
+            else:
+                return {
+                    'success': False, 
+                    'error': f"Order failed: {result.retcode} - {result.comment}"
+                }
+
+        except Exception as e:
+            error_msg = f"Manual trade error: {e}"
+            self.log_message(error_msg, "ERROR")
+            return {'success': False, 'error': error_msg}
+
+    def close_all_positions(self):

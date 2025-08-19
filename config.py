@@ -87,3 +87,13 @@ MAX_DRAWDOWN_PERCENT = 3.0          # Maximum allowed drawdown
 USE_DYNAMIC_DEVIATION = True    # Use ATR-based deviation
 OPTIMIZE_LOT_SIZING = True      # Optimize lot size calculation
 FAST_EXECUTION_MODE = True      # Enable fast execution mode
+
+# CONNECTION SETTINGS
+CONNECTION_TIMEOUT = 10         # MT5 connection timeout (seconds)
+RETRY_CONNECTION_ATTEMPTS = 3   # Number of connection retry attempts
+HEARTBEAT_INTERVAL = 1000       # Heartbeat interval (milliseconds)
+
+# ORDER EXECUTION SETTINGS
+ORDER_TIMEOUT = 5000           # Order execution timeout (milliseconds)
+SLIPPAGE_TOLERANCE = 20        # Maximum allowed slippage (points)
+FILL_POLICY = "IOC"           # Order fill policy (IOC/FOK)

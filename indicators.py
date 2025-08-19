@@ -6,7 +6,6 @@ PRODUCTION READY - Optimized for real-time trading
 """
 
 import numpy as np
-import pandas as pd
 from typing import List, Optional
 import logging
 
