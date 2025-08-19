@@ -509,7 +509,7 @@ class BotController(QObject):
 
             # 1. Initialize MT5 with multiple attempt strategies (Windows fix)
             mt5_initialized = False
-            
+
             # Strategy 1: Simple initialize
             try:
                 if mt5.initialize():
@@ -517,7 +517,7 @@ class BotController(QObject):
                     self.log_message("MT5 initialized successfully (simple)", "INFO")
             except Exception as e:
                 self.log_message(f"Simple init failed: {e}", "WARNING")
-            
+
             # Strategy 2: Try with common MT5 paths
             if not mt5_initialized:
                 mt5_paths = [
@@ -525,7 +525,7 @@ class BotController(QObject):
                     "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe",
                     "C:\\Program Files\\MetaTrader 5\\terminal.exe"
                 ]
-                
+
                 for path in mt5_paths:
                     try:
                         if mt5.initialize(path=path):
@@ -535,7 +535,7 @@ class BotController(QObject):
                     except Exception as e:
                         self.log_message(f"Path {path} failed: {e}", "WARNING")
                         continue
-            
+
             # Strategy 3: Initialize without path but with login attempt
             if not mt5_initialized:
                 try:
@@ -544,7 +544,7 @@ class BotController(QObject):
                         self.log_message("MT5 initialized on retry", "INFO")
                 except Exception as e:
                     self.log_message(f"Retry init failed: {e}", "WARNING")
-            
+
             if not mt5_initialized:
                 error = mt5.last_error()
                 self.log_message(f"MT5 initialization failed: {error}", "ERROR")
@@ -554,53 +554,53 @@ class BotController(QObject):
                 self.log_message("3. Enable 'Allow automated trading' in MT5", "ERROR")
                 self.log_message("4. Add this Python script to MT5 trusted programs", "ERROR")
                 return False
-            
+
             # 2. Get account info
             account_info = mt5.account_info()
             if account_info is None:
                 self.log_message("Failed to get account info - Check MT5 login", "ERROR")
                 self.log_message("Make sure you are logged into MT5 terminal", "ERROR")
                 return False
-            
+
             self.account_info = account_info._asdict()
             self.log_message(f"Connected to account: {self.account_info['login']}", "INFO")
             self.log_message(f"Account balance: ${self.account_info['balance']:.2f}", "INFO")
-            
+
             # 3. Select and validate symbol
             symbol = self.config['symbol']
             if not mt5.symbol_select(symbol, True):
                 self.log_message(f"Failed to select symbol {symbol}", "ERROR")
                 return False
-            
+
             # 4. Get symbol info
             self.symbol_info = mt5.symbol_info(symbol)
             if self.symbol_info is None:
                 self.log_message(f"Failed to get symbol info for {symbol}", "ERROR")
                 return False
-            
+
             # 5. Validate symbol trading
             if self.symbol_info.trade_mode != mt5.SYMBOL_TRADE_MODE_FULL:
                 self.log_message(f"Symbol {symbol} not available for trading", "ERROR")
                 return False
-            
+
             # 6. Log symbol specifications
             self.log_symbol_info()
-            
+
             self.is_connected = True
             self.log_message("MT5 connection successful", "INFO")
-            
+
             # Start real-time data feed and analysis worker
             self.setup_analysis_worker()
             if self.analysis_worker is not None:
                 self.analysis_worker.start()
             self.log_message("✅ ANALYSIS WORKER STARTED - LIVE SIGNAL GENERATION", "INFO")
-            
+
             # Start timers for real-time monitoring
             self.account_timer.start(1000)  # Update every 1 second for faster response
             self.position_timer.start(500)   # Update every 0.5 seconds for position monitoring
-            
+
             return True
-            
+
         except Exception as e:
             error_msg = f"MT5 connection error: {e}\n{traceback.format_exc()}"
             self.log_message(error_msg, "ERROR")
@@ -691,19 +691,19 @@ class BotController(QObject):
 
             symbol = self.config['symbol']
             side = signal.get('side')
-            
+
             # Calculate lot size based on risk
             lot_size = self.calculate_lot_size(signal)
-            
+
             # Get current tick for execution
             tick = mt5.symbol_info_tick(symbol)
             if not tick:
                 self.log_message("❌ Cannot get tick data for execution", "ERROR")
                 return False
-            
+
             # Calculate TP and SL
             tp_price, sl_price = self.calculate_tp_sl(signal, tick)
-            
+
             # Prepare order request
             if side == "BUY":
                 order_type = mt5.ORDER_TYPE_BUY
@@ -715,7 +715,7 @@ class BotController(QObject):
                 price = tick.bid
                 sl = sl_price
                 tp = tp_price
-            
+
             # Create order request
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -731,21 +731,21 @@ class BotController(QObject):
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
-            
+
             # Execute REAL order
             result = mt5.order_send(request)
-            
+
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 # Try with FOK filling
                 request["type_filling"] = mt5.ORDER_FILLING_FOK
                 result = mt5.order_send(request)
-            
+
             if result.retcode == mt5.TRADE_RETCODE_DONE:
                 self.log_message(f"✅ REAL ORDER EXECUTED: {side} {lot_size} lots @ {price:.5f}", "INFO")
                 self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
                 self.log_message(f"✅ SL: {sl:.5f}, TP: {tp:.5f}", "INFO")
                 self.daily_trades += 1
-                
+
                 # Log to CSV
                 self.log_trade_to_csv(signal, result, lot_size, sl, tp)
                 return True
@@ -766,12 +766,12 @@ class BotController(QObject):
                 return {'success': False, 'error': 'MT5 not connected - Real trading required'}
 
             symbol = self.config['symbol']
-            
+
             # Get current tick
             tick = mt5.symbol_info_tick(symbol)
             if not tick:
                 return {'success': False, 'error': 'Cannot get current price'}
-            
+
             # Determine order type and price
             if side == "BUY":
                 order_type = mt5.ORDER_TYPE_BUY
@@ -779,7 +779,7 @@ class BotController(QObject):
             else:
                 order_type = mt5.ORDER_TYPE_SELL
                 price = tick.bid
-            
+
             # Manual trades without automatic SL/TP
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -793,52 +793,76 @@ class BotController(QObject):
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
-            
+
             # Execute REAL manual order
             result = mt5.order_send(request)
-            
 
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                # Try FOK
+                request["type_filling"] = mt5.ORDER_FILLING_FOK
+                result = mt5.order_send(request)
+
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.log_message(f"✅ MANUAL {side} EXECUTED: {lot_size} lots @ {price:.5f}", "INFO")
+                self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
+                self.daily_trades += 1
+                return {
+                    'success': True, 
+                    'ticket': result.order, 
+                    'price': result.price,
+                    'deal': result.deal
+                }
+            else:
+                return {
+                    'success': False, 
+                    'error': f"Order failed: {result.retcode} - {result.comment}"
+                }
+
+        except Exception as e:
+            error_msg = f"Manual trade error: {e}"
+            self.log_message(error_msg, "ERROR")
+            return {'success': False, 'error': error_msg}
 
     def calculate_lot_size(self, signal):
         """Calculate lot size based on account risk percentage"""
         try:
             if not self.account_info:
                 return 0.01  # Minimum lot
-            
+
             balance = self.account_info.get('balance', 10000)
             risk_percent = self.config.get('risk_percent', 0.5) / 100
             risk_amount = balance * risk_percent
-            
+
             # Get symbol info for calculations
             if not self.symbol_info:
                 return 0.01
-            
+
             # Calculate based on SL distance
             point = self.symbol_info.point
             tick_value = getattr(self.symbol_info, 'trade_tick_value', 1.0)
-            
+
             # Estimate SL distance (will be refined in calculate_tp_sl)
             atr = signal.get('atr_points', 100)
             sl_points = max(self.config.get('min_sl_points', 100), atr)
-            
+
             sl_amount = sl_points * point * tick_value
             if sl_amount <= 0:
                 return 0.01
-            
+
             lot_size = risk_amount / sl_amount
-            
+
             # Apply symbol constraints
             min_lot = getattr(self.symbol_info, 'volume_min', 0.01)
             max_lot = getattr(self.symbol_info, 'volume_max', 100.0)
             step = getattr(self.symbol_info, 'volume_step', 0.01)
-            
+
             # Round to step
             lot_size = round(lot_size / step) * step
             lot_size = max(min_lot, min(lot_size, max_lot))
-            
+
             self.log_message(f"💰 Calculated lot size: {lot_size} (Risk: ${risk_amount:.2f})", "INFO")
             return lot_size
-            
+
         except Exception as e:
             self.log_message(f"Lot calculation error: {e}", "ERROR")
             return 0.01
@@ -848,52 +872,52 @@ class BotController(QObject):
         try:
             mode = self.config.get('tp_sl_mode', 'ATR')
             side = signal.get('side')
-            
+
             if side == "BUY":
                 entry_price = tick.ask
                 multiplier = 1
             else:
                 entry_price = tick.bid
                 multiplier = -1
-            
+
             point = self.symbol_info.point
-            
+
             if mode == "ATR":
                 atr_points = signal.get('atr_points', 100)
                 atr_multiplier = self.config.get('atr_multiplier', 2.0)
                 risk_multiple = self.config.get('risk_multiple', 2.0)
-                
+
                 sl_distance = max(atr_points * atr_multiplier, self.config.get('min_sl_points', 100))
                 tp_distance = sl_distance * risk_multiple
-                
+
             elif mode == "Points":
                 sl_distance = self.config.get('sl_points', 100)
                 tp_distance = self.config.get('tp_points', 200)
-                
+
             elif mode == "Pips":
                 digits = getattr(self.symbol_info, 'digits', 5)
                 pip_size = 10 if digits in [3, 5] else 1
-                
+
                 sl_distance = self.config.get('sl_pips', 10) * pip_size
                 tp_distance = self.config.get('tp_pips', 20) * pip_size
-                
+
             elif mode == "Balance%":
                 balance = self.account_info.get('balance', 10000)
                 tick_value = getattr(self.symbol_info, 'trade_tick_value', 1.0)
-                
+
                 sl_amount = balance * (self.config.get('sl_percent', 0.5) / 100)
                 tp_amount = balance * (self.config.get('tp_percent', 1.0) / 100)
-                
+
                 sl_distance = sl_amount / (point * tick_value)
                 tp_distance = tp_amount / (point * tick_value)
-            
+
             # Calculate final prices
             sl_price = entry_price - (multiplier * sl_distance * point)
             tp_price = entry_price + (multiplier * tp_distance * point)
-            
+
             self.log_message(f"🎯 TP/SL calculated: SL={sl_price:.5f}, TP={tp_price:.5f}", "INFO")
             return tp_price, sl_price
-            
+
         except Exception as e:
             self.log_message(f"TP/SL calculation error: {e}", "ERROR")
             # Fallback values
@@ -903,7 +927,7 @@ class BotController(QObject):
         """Log executed trade to CSV for analysis"""
         try:
             import csv
-            
+
             trade_data = [
                 datetime.now().isoformat(),
                 signal.get('side'),
@@ -917,19 +941,57 @@ class BotController(QObject):
                 'REAL',
                 result.comment
             ]
-            
+
             with open(self.csv_file, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(trade_data)
-                
+
         except Exception as e:
             self.log_message(f"CSV logging error: {e}", "ERROR")
+
+    def execute_manual_trade(self, side, lot_size):
+        """Execute REAL manual trade order via MT5"""
+        try:
+            if not self.is_connected or not MT5_AVAILABLE:
+                return {'success': False, 'error': 'MT5 not connected - Real trading required'}
+
+            symbol = self.config['symbol']
+
+            # Get current tick
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                return {'success': False, 'error': 'Cannot get current price'}
+
+            # Determine order type and price
+            if side == "BUY":
+                order_type = mt5.ORDER_TYPE_BUY
+                price = tick.ask
+            else:
+                order_type = mt5.ORDER_TYPE_SELL
+                price = tick.bid
+
+            # Manual trades without automatic SL/TP
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": lot_size,
+                "type": order_type,
+                "price": price,
+                "deviation": self.config.get('deviation', 10),
+                "magic": self.config.get('magic_number', 234567),
+                "comment": f"MANUAL_{side}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+
+            # Execute REAL manual order
+            result = mt5.order_send(request)
 
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 # Try FOK
                 request["type_filling"] = mt5.ORDER_FILLING_FOK
                 result = mt5.order_send(request)
-            
+
             if result.retcode == mt5.TRADE_RETCODE_DONE:
                 self.log_message(f"✅ MANUAL {side} EXECUTED: {lot_size} lots @ {price:.5f}", "INFO")
                 self.log_message(f"✅ Ticket: {result.order}, Deal: {result.deal}", "INFO")
@@ -1014,22 +1076,22 @@ class BotController(QObject):
             if account_info is None:
                 self.log_message("❌ Failed to get account info from MT5", "ERROR")
                 return
-            
+
             # Convert to dict and update
             self.account_info = account_info._asdict()
-            
+
             # Emit real account data to GUI
             self.signal_account_update.emit(self.account_info)
-            
+
             # Check for critical account alerts
             margin_level = self.account_info.get('margin_level', 1000)
             if margin_level < 200:
                 self.log_message(f"⚠️ LOW MARGIN LEVEL: {margin_level:.1f}%", "WARNING")
-            
+
             balance = self.account_info.get('balance', 0)
             equity = self.account_info.get('equity', 0)
             drawdown = ((balance - equity) / balance * 100) if balance > 0 else 0
-            
+
             if drawdown > self.config.get('max_drawdown_percent', 3.0):
                 self.log_message(f"🚨 HIGH DRAWDOWN: {drawdown:.1f}% - Consider stopping!", "WARNING")
 
@@ -1044,14 +1106,14 @@ class BotController(QObject):
 
             # Get REAL positions from MT5
             positions = mt5.positions_get(symbol=self.config['symbol'])
-            
+
             if positions is None:
                 positions = []
-            
+
             # Convert to list of dicts for GUI
             self.positions = []
             total_profit = 0.0
-            
+
             for pos in positions:
                 pos_dict = {
                     'ticket': pos.ticket,
@@ -1069,10 +1131,10 @@ class BotController(QObject):
                 }
                 self.positions.append(pos_dict)
                 total_profit += pos.profit
-            
+
             # Emit real position data
             self.signal_position_update.emit(self.positions)
-            
+
             # Log position summary
             if len(self.positions) > 0:
                 self.log_message(f"📊 {len(self.positions)} positions, Total P&L: ${total_profit:.2f}", "INFO")
@@ -1102,15 +1164,15 @@ class BotController(QObject):
 
             symbol = self.config['symbol']
             positions = mt5.positions_get(symbol=symbol)
-            
+
             if positions is None or len(positions) == 0:
                 self.log_message("✅ No positions to close", "INFO")
                 self.stop_bot()
                 return
-            
+
             closed_count = 0
             total_profit = 0.0
-            
+
             for position in positions:
                 # Determine close order type
                 if position.type == mt5.POSITION_TYPE_BUY:
@@ -1119,7 +1181,7 @@ class BotController(QObject):
                 else:
                     order_type = mt5.ORDER_TYPE_BUY
                     price = mt5.symbol_info_tick(symbol).ask
-                
+
                 # Create close request
                 close_request = {
                     "action": mt5.TRADE_ACTION_DEAL,
@@ -1134,17 +1196,17 @@ class BotController(QObject):
                     "type_time": mt5.ORDER_TIME_GTC,
                     "type_filling": mt5.ORDER_FILLING_IOC,
                 }
-                
+
                 # Execute close order
                 result = mt5.order_send(close_request)
-                
+
                 if result.retcode == mt5.TRADE_RETCODE_DONE:
                     closed_count += 1
                     total_profit += position.profit
                     self.log_message(f"✅ CLOSED: Ticket {position.ticket}, P&L: ${position.profit:.2f}", "INFO")
                 else:
                     self.log_message(f"❌ FAILED to close {position.ticket}: {result.comment}", "ERROR")
-            
+
             self.log_message(f"🚨 EMERGENCY STOP: {closed_count} positions closed, Total P&L: ${total_profit:.2f}", "WARNING")
             self.stop_bot()
 
@@ -1157,16 +1219,16 @@ class BotController(QObject):
         try:
             if not MT5_AVAILABLE or not self.is_connected:
                 return False
-            
+
             # Get position info
             positions = mt5.positions_get(ticket=ticket)
             if not positions:
                 self.log_message(f"❌ Position {ticket} not found", "ERROR")
                 return False
-            
+
             position = positions[0]
             symbol = position.symbol
-            
+
             # Determine close parameters
             if position.type == mt5.POSITION_TYPE_BUY:
                 order_type = mt5.ORDER_TYPE_SELL
@@ -1174,7 +1236,7 @@ class BotController(QObject):
             else:
                 order_type = mt5.ORDER_TYPE_BUY
                 price = mt5.symbol_info_tick(symbol).ask
-            
+
             # Close request
             close_request = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -1189,16 +1251,16 @@ class BotController(QObject):
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
-            
+
             result = mt5.order_send(close_request)
-            
+
             if result.retcode == mt5.TRADE_RETCODE_DONE:
                 self.log_message(f"✅ Position {ticket} closed successfully", "INFO")
                 return True
             else:
                 self.log_message(f"❌ Failed to close {ticket}: {result.comment}", "ERROR")
                 return False
-                
+
         except Exception as e:
             self.log_message(f"Close position error: {e}", "ERROR")
             return False
@@ -1263,7 +1325,7 @@ class BotController(QObject):
     def set_config(self, key, value):
         """Update configuration"""
         self.config[key] = value
-        
+
     def get_config(self, key):
         """Get configuration value"""
         return self.config.get(key)
@@ -1271,7 +1333,7 @@ class BotController(QObject):
     def update_tp_sl_config(self, mode, tp_value, sl_value):
         """Update TP/SL configuration"""
         self.config['tp_sl_mode'] = mode
-        
+
         if mode == 'ATR':
             self.config['atr_multiplier'] = tp_value if tp_value else 2.0
         elif mode == 'Points':

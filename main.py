@@ -55,7 +55,7 @@ def setup_logging():
     """Configure comprehensive logging dengan Windows console fix"""
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    
+
     # Fix Windows console encoding untuk emoji
     try:
         if hasattr(sys.stdout, 'reconfigure'):
@@ -65,7 +65,7 @@ def setup_logging():
     except (AttributeError, OSError):
         # Python < 3.7 atau tidak support reconfigure
         pass
-    
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -82,15 +82,22 @@ def main():
     logger.info("=" * 60)
     logger.info("STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY")
     logger.info("=" * 60)
-    
+
     # MT5 REAL TRADING VALIDATION - MANDATORY FOR OPERATION
     try:
         import MetaTrader5 as mt5
-        # Test real MT5 connection immediately
+        MT5_AVAILABLE = True
+    except ImportError:
+        MT5_AVAILABLE = False
+        logger.error("❌ CRITICAL: MetaTrader5 module not installed!")
+        logger.error("❌ Install with: pip install MetaTrader5")
+        logger.error("❌ Real trading requires MT5 Python API")
+
+    # Test real MT5 connection immediately
+    if MT5_AVAILABLE:
         if mt5.initialize():
             account_info = mt5.account_info()
             if account_info is not None:
-                MT5_AVAILABLE = True
                 logger.info(f"✅ REAL MT5 CONNECTED - Account: {account_info.login}")
                 logger.info(f"✅ Live Balance: ${account_info.balance:.2f}")
                 logger.info(f"✅ Server: {account_info.server if hasattr(account_info, 'server') else 'Unknown'}")
@@ -101,7 +108,7 @@ def main():
                 logger.error("❌ Please login to MetaTrader 5 terminal first")
                 logger.error("❌ Real money trading requires valid account")
                 MT5_AVAILABLE = False
-                
+
                 # Exit if no real account
                 print("\n" + "="*60)
                 print("CRITICAL ERROR: NO REAL MT5 ACCOUNT DETECTED")
@@ -117,49 +124,37 @@ def main():
             logger.error("❌ CRITICAL: MT5 initialization failed!")
             logger.error("❌ Check MetaTrader 5 installation")
             MT5_AVAILABLE = False
-            
+
             print("\n" + "="*60)
             print("CRITICAL ERROR: METATRADER 5 NOT AVAILABLE")
             print("This bot requires MetaTrader 5 for live trading.")
             print("Please install MetaTrader 5 and try again.")
             print("="*60)
             return 1
-            
-    except ImportError:
-        logger.error("❌ CRITICAL: MetaTrader5 Python module not installed!")
-        logger.error("❌ Install with: pip install MetaTrader5")
-        MT5_AVAILABLE = False
-        
-        print("\n" + "="*60)
-        print("CRITICAL ERROR: METATRADER5 MODULE MISSING")
-        print("Install the required module:")
-        print("pip install MetaTrader5")
-        print("="*60)
-        return 1
-    
+
     # Reject startup if no real MT5
     if not MT5_AVAILABLE:
         logger.error("❌ STARTUP REJECTED - REAL MT5 REQUIRED")
         return 1
-    
+
     # Create QApplication
     app = QApplication(sys.argv)
     app.setApplicationName("MT5 Professional Scalping Bot - FIXED")
     app.setApplicationVersion("2.1.0")
     # app.setAttribute(Qt.AA_DontUseNativeMenuBar, True)  # Fix untuk beberapa sistem
-    
+
     try:
         logger.info("Initializing FIXED controller...")
-        
+
         # Initialize FIXED controller dengan semua perbaikan
         controller = BotController()
-        
+
         logger.info("Creating FIXED main window...")
-        
+
         # Create FIXED main window dengan TP/SL input dinamis
         main_window = MainWindow(controller)
         main_window.show()
-        
+
         logger.info("🚀 REAL MONEY TRADING BOT INITIALIZED SUCCESSFULLY!")
         logger.info("💰 LIVE TRADING FEATURES ACTIVE:")
         logger.info("1. ✅ Real MT5 connection with live account data")
@@ -176,24 +171,24 @@ def main():
         logger.info("📋 WORKFLOW: Connect → Configure Risk → Start Bot")
         logger.info("🛡️  START IN SHADOW MODE FOR TESTING FIRST")
         logger.info("=" * 60)
-        
+
         # Start event loop
         return app.exec()
-        
+
     except Exception as e:
         error_msg = f"Application startup error: {e}\n{traceback.format_exc()}"
         logger.error(error_msg)
-        
+
         # Show error dialog
         if 'app' in locals():
-            QMessageBox.critical(None, "Startup Error", 
+            QMessageBox.critical(None, "Startup Error",
                                f"Failed to start application:\n\n{str(e)}\n\nCheck logs for details.")
-        
+
         return 1
 
 if __name__ == "__main__":
     exit_code = main()
-    
+
     print("\n" + "=" * 60)
     print("FIXED MT5 SCALPING BOT - SHUTDOWN")
     if exit_code == 0:
@@ -201,5 +196,5 @@ if __name__ == "__main__":
     else:
         print("Application exited with errors")
     print("=" * 60)
-    
+
     sys.exit(exit_code)
