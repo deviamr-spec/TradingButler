@@ -43,3 +43,30 @@
 2025-08-19 11:43:58,052 - __main__ - INFO - ✅ All systems operational
 2025-08-19 11:43:58,052 - __main__ - INFO - 🚀 READY FOR REAL TRADING - USE SHADOW MODE FIRST!
 2025-08-19 11:44:14,987 - __main__ - INFO - Application shutdown complete
+2025-08-19 04:55:13,009 - __main__ - INFO - === MT5 PROFESSIONAL SCALPING BOT STARTUP ===
+2025-08-19 04:55:13,009 - __main__ - ERROR - ❌ MetaTrader5 module not installed
+2025-08-19 04:55:13,009 - __main__ - ERROR - Bot will run in demo mode - NO REAL TRADING POSSIBLE
+2025-08-19 04:55:13,769 - __main__ - INFO - Initializing trading controller...
+2025-08-19 04:55:13,770 - __main__ - INFO - Creating main window...
+2025-08-19 04:55:13,838 - __main__ - INFO - ✅ Application initialized successfully
+2025-08-19 04:55:13,839 - __main__ - INFO - ✅ GUI loaded and ready
+2025-08-19 04:55:13,839 - __main__ - INFO - ✅ All systems operational
+2025-08-19 04:55:13,839 - __main__ - INFO - 📊 DEMO MODE - For testing purposes only
+2025-08-19 04:55:17,916 - __main__ - INFO - === MT5 PROFESSIONAL SCALPING BOT STARTUP ===
+2025-08-19 04:55:17,916 - __main__ - ERROR - ❌ MetaTrader5 module not installed
+2025-08-19 04:55:17,916 - __main__ - ERROR - Bot will run in demo mode - NO REAL TRADING POSSIBLE
+2025-08-19 04:55:17,937 - __main__ - INFO - Initializing trading controller...
+2025-08-19 04:55:17,937 - __main__ - INFO - Creating main window...
+2025-08-19 04:55:17,984 - __main__ - INFO - ✅ Application initialized successfully
+2025-08-19 04:55:17,984 - __main__ - INFO - ✅ GUI loaded and ready
+2025-08-19 04:55:17,984 - __main__ - INFO - ✅ All systems operational
+2025-08-19 04:55:17,984 - __main__ - INFO - 📊 DEMO MODE - For testing purposes only
+2025-08-19 04:55:23,721 - __main__ - INFO - === MT5 PROFESSIONAL SCALPING BOT STARTUP ===
+2025-08-19 04:55:23,721 - __main__ - ERROR - ❌ MetaTrader5 module not installed
+2025-08-19 04:55:23,721 - __main__ - ERROR - Bot will run in demo mode - NO REAL TRADING POSSIBLE
+2025-08-19 04:55:23,754 - __main__ - INFO - Initializing trading controller...
+2025-08-19 04:55:23,755 - __main__ - INFO - Creating main window...
+2025-08-19 04:55:23,803 - __main__ - INFO - ✅ Application initialized successfully
+2025-08-19 04:55:23,803 - __main__ - INFO - ✅ GUI loaded and ready
+2025-08-19 04:55:23,804 - __main__ - INFO - ✅ All systems operational
+2025-08-19 04:55:23,804 - __main__ - INFO - 📊 DEMO MODE - For testing purposes only

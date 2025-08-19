@@ -7,7 +7,7 @@ channel = "stable-25_05"
 packages = ["fontconfig", "freetype", "glib", "glibcLocales", "libGL", "libxcrypt", "libxkbcommon", "mesa", "qt6.qtbase", "xorg.libX11", "xorg.libXext"]
 
 [workflows]
-runButton = "MT5 Production Final"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "MT5 Real Trading Bot"
@@ -40,12 +40,12 @@ args = "Fixed MT5 Scalping Bot"
 name = "Fixed MT5 Scalping Bot"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "vnc"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python fixed_main.py"
-
-[workflows.workflow.metadata]
-outputType = "console"
+args = "python main.py"
 
 [[workflows.workflow]]
 name = "Production MT5 Bot"
