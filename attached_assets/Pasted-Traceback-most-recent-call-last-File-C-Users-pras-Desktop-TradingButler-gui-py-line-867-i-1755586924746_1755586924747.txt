@@ -1,0 +1,52 @@
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 867, in on_connect
+    self.log_message("🔄 Attempting MT5 connection...", "INFO")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 898, in on_connect
+    self.log_message(error_msg, "ERROR")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 867, in on_connect
+    self.log_message("🔄 Attempting MT5 connection...", "INFO")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 898, in on_connect
+    self.log_message(error_msg, "ERROR")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 867, in on_connect
+    self.log_message("🔄 Attempting MT5 connection...", "INFO")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 898, in on_connect
+    self.log_message(error_msg, "ERROR")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 867, in on_connect
+    self.log_message("🔄 Attempting MT5 connection...", "INFO")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\gui.py", line 898, in on_connect
+    self.log_message(error_msg, "ERROR")
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MainWindow' object has no attribute 'log_message'. Did you mean: 'on_log_message'?
