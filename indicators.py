@@ -81,6 +81,10 @@ class TechnicalIndicators:
             avg_gains = np.zeros(len(gains))
             avg_losses = np.zeros(len(losses))
             
+            # Validate indices
+            if period > len(gains):
+                return np.full(len(data), 50.0)
+            
             # First average is SMA
             avg_gains[period-1] = np.mean(gains[:period])
             avg_losses[period-1] = np.mean(losses[:period])
@@ -90,18 +94,16 @@ class TechnicalIndicators:
                 avg_gains[i] = alpha * gains[i] + (1 - alpha) * avg_gains[i-1]
                 avg_losses[i] = alpha * losses[i] + (1 - alpha) * avg_losses[i-1]
             
-            # Calculate RSI
-            rsi_values = np.zeros(len(data))
+            # Calculate RSI - Fix: match array sizes properly
+            rsi_values = np.full(len(data), 50.0)
             
-            for i in range(period-1, len(data)):
-                if avg_losses[i] == 0:
-                    rsi_values[i] = 100.0
-                else:
+            # RSI calculation dengan bounds checking
+            for i in range(period-1, min(len(gains), len(data)-1)):
+                if i < len(avg_losses) and avg_losses[i] != 0:
                     rs = avg_gains[i] / avg_losses[i]
-                    rsi_values[i] = 100.0 - (100.0 / (1.0 + rs))
-            
-            # Set initial values to 50
-            rsi_values[:period-1] = 50.0
+                    rsi_values[i+1] = 100.0 - (100.0 / (1.0 + rs))  # i+1 karena gains/losses 1 elemen lebih pendek
+                elif i < len(avg_losses):
+                    rsi_values[i+1] = 100.0
             
             return rsi_values
             
@@ -123,19 +125,28 @@ class TechnicalIndicators:
             ATR values array
         """
         try:
-            if len(high) < period + 1:
+            if len(high) < period + 1 or len(low) < period + 1 or len(close) < period + 1:
                 return np.full(len(high), 0.001)
+            
+            # Ensure all arrays have same length
+            min_len = min(len(high), len(low), len(close))
+            high = high[:min_len]
+            low = low[:min_len]
+            close = close[:min_len]
             
             # Calculate True Range
             tr_list = []
             
-            for i in range(1, len(high)):
+            for i in range(1, min_len):
                 tr1 = high[i] - low[i]
                 tr2 = abs(high[i] - close[i-1])
                 tr3 = abs(low[i] - close[i-1])
                 tr = max(tr1, tr2, tr3)
                 tr_list.append(tr)
             
+            if len(tr_list) == 0:
+                return np.full(len(high), 0.001)
+                
             tr_array = np.array(tr_list)
             
             # Calculate ATR using EMA

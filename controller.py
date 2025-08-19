@@ -929,9 +929,10 @@ class BotController(QObject):
             
         except Exception as e:
             self.log_message(f"TP/SL calculation error: {e}", "ERROR")
-            # Fallback
+            # Fallback - ensure side is defined
+            signal_side = signal.get('side', 'BUY') if isinstance(signal, dict) else 'BUY'
             fallback_point = 0.00001
-            if side == 'BUY':
+            if signal_side == 'BUY':
                 return entry_price + 200 * fallback_point, entry_price - 100 * fallback_point
             else:
                 return entry_price - 200 * fallback_point, entry_price + 100 * fallback_point
