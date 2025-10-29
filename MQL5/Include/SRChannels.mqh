@@ -1,0 +1,1 @@
+Complete MQL5 library for Support/Resistance channel detection using pivot points. Parameters: pivot period 10, channel width 5% of 300-bar range, minimum strength 2 pivots, loopback 290 bars. Returns array of S/R levels and function to check if price is within 20 pips of any level.

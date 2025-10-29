@@ -1,0 +1,1 @@
+Standalone indicator displaying 10 sentiment components as histogram with average sentiment line. Shows overbought (75), neutral (50), oversold (25) levels. Color gradient from red (bearish) to blue (bullish).

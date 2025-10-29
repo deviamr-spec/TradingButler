@@ -1,0 +1,1 @@
+Complete documentation with installation instructions, parameter descriptions, usage guide for USOIL trading, backtest recommendations, and troubleshooting.

@@ -1,0 +1,1 @@
+Complete MQL5 library for calculating 10 sentiment indicators (RSI, Stochastic, StochasticRSI, CCI, Bull Bear Power, MA, VWAP, Bollinger Bands, Supertrend, Linear Regression). Each indicator returns normalized score 0-100. Strong Bullish >80, Strong Bearish <20.

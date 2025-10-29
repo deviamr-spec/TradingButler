@@ -1,0 +1,1 @@
+Standalone indicator displaying Support/Resistance channels as rectangles. Green for support, red for resistance, gray when price inside channel. Shows pivot points and alerts on breakout.
